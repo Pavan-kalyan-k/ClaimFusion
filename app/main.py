@@ -26,10 +26,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-async def startup_event():
-    # Load all models at startup
-    models.load_models()
 
 @app.get("/health")
 def health_check():

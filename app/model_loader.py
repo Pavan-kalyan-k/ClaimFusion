@@ -18,16 +18,19 @@ class ModelManager:
         self.ml_model = None
 
     def load_models(self):
-        print("Loading YOLO model...")
-        self.yolo_model = YOLO(settings.YOLO_MODEL_PATH)
-        
-        print("Loading Keras model...")
-        self.keras_model = keras.models.load_model(settings.KERAS_MODEL_PATH)
-        
-        print("Loading ML model...")
-        self.ml_model = joblib.load(settings.ML_MODEL_PATH)
-        
-        print("All models loaded successfully.")
+        if self.yolo_model is None:
+            print("Loading YOLO model...")
+            self.yolo_model = YOLO(settings.YOLO_MODEL_PATH)
+            
+        if self.keras_model is None:
+            print("Loading Keras model...")
+            self.keras_model = keras.models.load_model(settings.KERAS_MODEL_PATH)
+            
+        if self.ml_model is None:
+            print("Loading ML model...")
+            self.ml_model = joblib.load(settings.ML_MODEL_PATH)
+            
+        print("Models are ready.")
 
 # Create a singleton instance
 models = ModelManager()

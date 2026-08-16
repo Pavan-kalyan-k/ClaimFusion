@@ -24,6 +24,9 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
         
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
+    # Ensure models are loaded
+    models.load_models()
+    
     # 2. YOLO Inference
     results = models.yolo_model.predict(
         source=image_path,
