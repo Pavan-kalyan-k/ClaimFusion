@@ -17,6 +17,7 @@ from app.schemas import (
 )
 
 import logging
+import traceback
 from fastapi import HTTPException
 
 # Configure basic logging
@@ -24,28 +25,28 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def run_prediction_pipeline(image_path: str) -> PredictionResponse:
-    logger.info("====================================")
-    logger.info("AI SCAN START")
-    logger.info("====================================")
+    print("[1] PREDICT REQUEST RECEIVED")
     
     # 1. Load Image
     try:
+        print("[2] IMAGE RECEIVED")
+        print("[3] IMAGE PREPROCESSING START")
         image = cv2.imread(image_path)
         if image is None:
             raise ValueError(f"Could not read image at {image_path}")
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        logger.info(f"Image received. Size: {image_rgb.shape}, Format: RGB")
+        print("[4] IMAGE PREPROCESSING COMPLETE")
     except Exception as e:
-        logger.exception("PREPROCESSING FAILED")
-        raise HTTPException(status_code=500, detail=f"Image preprocessing failed: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {type(e).__name__}: {str(e)}")
     
     # 2. YOLO Inference
     try:
-        logger.info("Loading YOLO...")
+        print("[5] YOLO LOAD START")
         yolo_model = models.load_yolo()
-        logger.info("YOLO loaded")
+        print("[6] YOLO LOAD COMPLETE")
         
-        logger.info("YOLO inference started")
+        print("[7] YOLO INFERENCE START")
         results = yolo_model.predict(
             source=image_path,
             conf=settings.YOLO_CONF_THRESHOLD,
@@ -53,7 +54,7 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
             device="cpu",
             verbose=False
         )
-        logger.info("YOLO inference completed")
+        print("[8] YOLO INFERENCE COMPLETE")
         
         yolo_result = results[0]
         boxes = yolo_result.boxes
@@ -72,8 +73,8 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
                     "box": [x1, y1, x2, y2]
                 })
     except Exception as e:
-        logger.exception("YOLO MODEL FAILED")
-        raise HTTPException(status_code=500, detail=f"YOLO model failed: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {type(e).__name__}: {str(e)}")
     finally:
         models.unload_yolo() # Free YOLO memory!
             
@@ -86,11 +87,11 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
         severities = []
         
         if len(final_detections) > 0:
-            logger.info("Loading severity model...")
+            print("[9] SEVERITY LOAD START")
             keras_model = models.load_keras()
-            logger.info("Severity model loaded")
+            print("[10] SEVERITY LOAD COMPLETE")
             
-            logger.info("Severity inference started")
+            print("[11] SEVERITY INFERENCE START")
             for det in final_detections:
                 x1, y1, x2, y2 = det["box"]
                 
@@ -115,10 +116,10 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
                 ))
                 
                 detected_part_names.add(det["class_name"])
-            logger.info("Severity inference completed")
+            print("[12] SEVERITY INFERENCE COMPLETE")
     except Exception as e:
-        logger.exception("KERAS MODEL FAILED")
-        raise HTTPException(status_code=500, detail=f"Severity Keras model failed: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {type(e).__name__}: {str(e)}")
     finally:
         models.unload_keras() # Free Keras memory!
             
@@ -135,22 +136,22 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
         if overall_severity_str == "No Damage":
             claim_amount = 0.0
         else:
-            logger.info("Loading claim model...")
+            print("[13] CLAIM MODEL LOAD START")
             ml_model = models.load_ml()
-            logger.info("Claim model loaded")
+            print("[14] CLAIM MODEL LOAD COMPLETE")
             
-            logger.info("Claim inference started")
+            print("[15] CLAIM PREDICTION START")
             ml_features = prepare_ml_features(list(detected_part_names), overall_severity_str)
             claim_amount = float(ml_model.predict(ml_features)[0])
-            logger.info("Claim inference completed")
+            print("[16] CLAIM PREDICTION COMPLETE")
     except Exception as e:
-        logger.exception("CLAIM MODEL FAILED")
-        raise HTTPException(status_code=500, detail=f"Claim ML model failed: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {type(e).__name__}: {str(e)}")
     finally:
         models.unload_ml() # Free ML memory!
         
-    logger.info("AI SCAN COMPLETE")
-        
+    print("[17] RESPONSE GENERATION")
+    
     # 6. Build Response
     if overall_severity_str == "No Damage":
         summary_report = "No vehicle damage was detected in the image. No claim is required."
@@ -158,7 +159,7 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
         parts_str = ", ".join(list(detected_part_names))
         summary_report = f"We detected {len(detected_part_names)} damaged vehicle part(s): {parts_str}. The overall severity is {overall_severity_str.upper()}, resulting in an estimated insurance claim payout of ${claim_amount:,.2f}."
 
-    return PredictionResponse(
+    resp = PredictionResponse(
         status="success",
         summary_report=summary_report,
         damage_detection=DamageDetectionResult(
@@ -173,3 +174,7 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
             prediction="Claim approved" if claim_amount > 0 else "No claim required"
         )
     )
+    print("[18] PREDICTION COMPLETE")
+    return resp
+        
+

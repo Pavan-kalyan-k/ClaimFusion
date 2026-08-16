@@ -69,26 +69,25 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('file', selectedFile);
 
         try {
+            // DEBUG LOGS
+            const API_URL = window.location.origin;
+            console.log("API URL:", API_URL);
+            console.log("Request URL:", `${API_URL}/predict`);
+            
             const response = await fetch('/predict', {
                 method: 'POST',
                 body: formData
             });
 
+            console.log("STATUS:", response.status);
+            const responseText = await response.text();
+            console.log("BACKEND RESPONSE:", responseText);
+
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error("AI API failed:", response.status, errorText);
-                
-                let detail = "Failed to analyze image";
-                try {
-                    const errData = JSON.parse(errorText);
-                    detail = errData.detail || detail;
-                } catch(e) {
-                    detail = `Server error: ${response.status}`;
-                }
-                throw new Error(detail);
+                throw new Error(`Backend ${response.status}: ${responseText}`);
             }
 
-            const data = await response.json();
+            const data = JSON.parse(responseText);
             displayResults(data);
         } catch (error) {
             alert(`Error: ${error.message}`);
