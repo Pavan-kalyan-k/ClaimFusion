@@ -49,6 +49,23 @@ def model_status():
         "claim": get_status(models.ml_model)
     }
 
+@app.get("/debug/claim")
+def debug_claim():
+    import joblib
+    try:
+        model = joblib.load("gradient_boosting_model.pkl")
+        return {
+            "success": True,
+            "model_type": str(type(model))
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Claim model loading failed: {type(e).__name__}: {str(e)}"
+        )
+
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_claim(file: UploadFile = File(...)):
     if not file.content_type.startswith("image/"):

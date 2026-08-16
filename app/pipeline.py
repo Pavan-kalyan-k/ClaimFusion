@@ -25,28 +25,25 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def run_prediction_pipeline(image_path: str) -> PredictionResponse:
-    print("[1] PREDICT REQUEST RECEIVED")
+    print("[PREDICT 01] Request received")
     
     # 1. Load Image
     try:
-        print("[2] IMAGE RECEIVED")
-        print("[3] IMAGE PREPROCESSING START")
+        print("[PREDICT 02] Image received")
         image = cv2.imread(image_path)
         if image is None:
             raise ValueError(f"Could not read image at {image_path}")
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        print("[4] IMAGE PREPROCESSING COMPLETE")
+        print("[PREDICT 03] Image preprocessing complete")
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Prediction failed: {type(e).__name__}: {str(e)}")
     
     # 2. YOLO Inference
     try:
-        print("[5] YOLO LOAD START")
+        print("[PREDICT 04] YOLO started")
         yolo_model = models.load_yolo()
-        print("[6] YOLO LOAD COMPLETE")
         
-        print("[7] YOLO INFERENCE START")
         results = yolo_model.predict(
             source=image_path,
             conf=settings.YOLO_CONF_THRESHOLD,
@@ -54,7 +51,7 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
             device="cpu",
             verbose=False
         )
-        print("[8] YOLO INFERENCE COMPLETE")
+        print("[PREDICT 05] YOLO completed")
         
         yolo_result = results[0]
         boxes = yolo_result.boxes
@@ -87,11 +84,9 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
         severities = []
         
         if len(final_detections) > 0:
-            print("[9] SEVERITY LOAD START")
+            print("[PREDICT 06] Severity started")
             keras_model = models.load_keras()
-            print("[10] SEVERITY LOAD COMPLETE")
             
-            print("[11] SEVERITY INFERENCE START")
             for det in final_detections:
                 x1, y1, x2, y2 = det["box"]
                 
@@ -116,7 +111,7 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
                 ))
                 
                 detected_part_names.add(det["class_name"])
-            print("[12] SEVERITY INFERENCE COMPLETE")
+            print("[PREDICT 07] Severity completed")
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Prediction failed: {type(e).__name__}: {str(e)}")
@@ -136,21 +131,22 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
         if overall_severity_str == "No Damage":
             claim_amount = 0.0
         else:
-            print("[13] CLAIM MODEL LOAD START")
+            print("[PREDICT 08] Claim model loading")
             ml_model = models.load_ml()
-            print("[14] CLAIM MODEL LOAD COMPLETE")
+            print("[PREDICT 09] Claim model loaded")
             
-            print("[15] CLAIM PREDICTION START")
+            print("[PREDICT 10] Claim preprocessing")
             ml_features = prepare_ml_features(list(detected_part_names), overall_severity_str)
+            print("[PREDICT 11] Claim prediction")
             claim_amount = float(ml_model.predict(ml_features)[0])
-            print("[16] CLAIM PREDICTION COMPLETE")
+            print("[PREDICT 12] Claim prediction completed")
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Prediction failed: {type(e).__name__}: {str(e)}")
     finally:
         models.unload_ml() # Free ML memory!
         
-    print("[17] RESPONSE GENERATION")
+    print("[PREDICT 13] JSON response")
     
     # 6. Build Response
     if overall_severity_str == "No Damage":
@@ -174,7 +170,7 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
             prediction="Claim approved" if claim_amount > 0 else "No claim required"
         )
     )
-    print("[18] PREDICTION COMPLETE")
+    print("[PREDICT 14] Request completed")
     return resp
         
 
