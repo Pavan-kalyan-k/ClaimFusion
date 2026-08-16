@@ -12,6 +12,14 @@ torch.load = patched_load
 
 from ultralytics import YOLO
 import keras
+from keras.initializers import GlorotUniform
+
+class SafeGlorotUniform(GlorotUniform):
+    def __init__(self, seed=None, input_axes=None, output_axes=None, **kwargs):
+        super().__init__(seed=seed)
+
+keras.utils.get_custom_objects().update({'GlorotUniform': SafeGlorotUniform})
+
 from app.config import settings
 
 class ModelManager:
