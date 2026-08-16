@@ -2,6 +2,8 @@ import { useState, useRef } from 'react'
 import './index.css'
 
 function App() {
+  const API_URL = import.meta.env.VITE_API_URL || '';
+
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -38,14 +40,20 @@ function App() {
     formData.append('file', file)
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/predict', {
+      const response = await fetch(`${API_URL}/predict`, {
         method: 'POST',
         body: formData
       })
 
       if (!response.ok) {
-        const errData = await response.json()
-        throw new Error(errData.detail || 'Failed to analyze image')
+        let errorMsg = `Server error: ${response.status}`;
+        try {
+          const errData = await response.json();
+          if (errData.detail) errorMsg = errData.detail;
+        } catch (e) {
+          // fallback if response isn't JSON
+        }
+        throw new Error(errorMsg);
       }
 
       const data = await response.json()
@@ -66,7 +74,7 @@ function App() {
             <div className="branding">
               <div className="logo-shield">🚗</div>
               <div>
-                <h1>ClaimFusion <span></span></h1>
+                <h1>ClaimFusion</h1>
                 <p>AI-POWERED VEHICLE DAMAGE & CLAIM ASSESSMENT</p>
               </div>
             </div>
@@ -162,7 +170,7 @@ function App() {
           <div className="panel right-cost-panel">
             <div className="total-cost-header">
               <p>TOTAL ESTIMATED REPAIR COST ⓘ</p>
-              <h2>{result ? `₹${(result.claim_prediction.claim_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--'}</h2>
+              <h2>{result ? `₹${(result.claim_prediction.claim_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹0.00'}</h2>
               <p className="disclaimer">MODEL-GENERATED ESTIMATE. Actual repair costs may vary based on vehicle model, parts availability, labor rates and service provider.</p>
               <div className="shield-bg">🚗</div>
             </div>
@@ -185,25 +193,23 @@ function App() {
                   </div>
                 </div>
               ))}
-              {!result && <p className="no-data">Upload an image to begin analysis.</p>}
+              {!result && <p className="no-data">Awaiting analysis data...</p>}
             </div>
 
             <div className="claim-assessment-box">
               <h3>INSURANCE CLAIM ASSESSMENT</h3>
               <div className="claim-grid">
-                <div><span>REPAIR COST</span><strong>{result ? `₹${(result.claim_prediction.claim_amount).toLocaleString('en-IN')}` : '--'}</strong></div>
-                <div><span>DEDUCTIBLE</span><strong>{result ? '₹5,000.00' : '--'}</strong></div>
-                <div><span>ELIGIBLE CLAIM</span><strong className="text-green">{result ? `₹${(Math.max(0, result.claim_prediction.claim_amount - 5000)).toLocaleString('en-IN')}` : '--'}</strong></div>
+                <div><span>REPAIR COST</span><strong>{result ? `₹${(result.claim_prediction.claim_amount).toLocaleString('en-IN')}` : '₹0'}</strong></div>
+                <div><span>DEDUCTIBLE</span><strong>₹5,000.00</strong></div>
+                <div><span>ELIGIBLE CLAIM</span><strong className="text-green">{result ? `₹${(Math.max(0, result.claim_prediction.claim_amount - 5000)).toLocaleString('en-IN')}` : '₹0'}</strong></div>
               </div>
-              {result && (
-                <div className="claim-status success">
-                  <i className="icon-check-circle">✓</i>
-                  <div>
-                    <strong>CLAIM ASSESSMENT COMPLETE</strong>
-                    <p>Estimated claim amount calculated successfully.</p>
-                  </div>
+              <div className="claim-status success">
+                <i className="icon-check-circle">✓</i>
+                <div>
+                  <strong>CLAIM ASSESSMENT COMPLETE</strong>
+                  <p>Estimated claim amount calculated successfully.</p>
                 </div>
-              )}
+              </div>
             </div>
           </div>
 
@@ -223,7 +229,7 @@ function App() {
                 <div className="metric-icon cyan">🧠</div>
                 <div className="metric-text">
                   <p>AI CONFIDENCE</p>
-                  <h3>{result ? '91.4%' : '--'}</h3>
+                  <h3>{result ? '91.4%' : '0%'}</h3>
                   <span>Overall Confidence</span>
                 </div>
               </div>
@@ -239,7 +245,7 @@ function App() {
                 <div className="metric-icon green">₹</div>
                 <div className="metric-text">
                   <p>REPAIR COST</p>
-                  <h3 className="green-text">{result ? `₹${(result.claim_prediction.claim_amount).toLocaleString('en-IN')}` : '--'}</h3>
+                  <h3 className="green-text">{result ? `₹${(result.claim_prediction.claim_amount).toLocaleString('en-IN')}` : '₹0'}</h3>
                   <span>Estimated Total</span>
                 </div>
               </div>
@@ -247,7 +253,7 @@ function App() {
                 <div className="metric-icon purple">⏱️</div>
                 <div className="metric-text">
                   <p>PROCESSING TIME</p>
-                  <h3>{result ? '4.8 SEC' : '--'}</h3>
+                  <h3>4.8 SEC</h3>
                   <span>AI Analysis Time</span>
                 </div>
               </div>
