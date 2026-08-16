@@ -82,26 +82,44 @@ except Exception:
 
 from app.config import settings
 
+import gc
+
 class ModelManager:
     def __init__(self):
         self.yolo_model = None
         self.keras_model = None
         self.ml_model = None
 
-    def load_models(self):
+    def load_yolo(self):
         if self.yolo_model is None:
             print("Loading YOLO model...")
             self.yolo_model = YOLO(settings.YOLO_MODEL_PATH)
-            
+        return self.yolo_model
+        
+    def unload_yolo(self):
+        self.yolo_model = None
+        gc.collect()
+
+    def load_keras(self):
         if self.keras_model is None:
             print("Loading Keras model...")
             self.keras_model = keras.models.load_model(settings.KERAS_MODEL_PATH, compile=False)
-            
+        return self.keras_model
+        
+    def unload_keras(self):
+        self.keras_model = None
+        keras.backend.clear_session()
+        gc.collect()
+
+    def load_ml(self):
         if self.ml_model is None:
             print("Loading ML model...")
             self.ml_model = joblib.load(settings.ML_MODEL_PATH)
-            
-        print("Models are ready.")
+        return self.ml_model
+        
+    def unload_ml(self):
+        self.ml_model = None
+        gc.collect()
 
 # Create a singleton instance
 models = ModelManager()

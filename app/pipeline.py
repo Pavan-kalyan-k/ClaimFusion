@@ -24,11 +24,9 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
         
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-    # Ensure models are loaded
-    models.load_models()
-    
     # 2. YOLO Inference
-    results = models.yolo_model.predict(
+    yolo_model = models.load_yolo()
+    results = yolo_model.predict(
         source=image_path,
         conf=settings.YOLO_CONF_THRESHOLD,
         iou=settings.YOLO_IOU_THRESHOLD,
@@ -43,7 +41,7 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
     if boxes is not None and len(boxes) > 0:
         for box in boxes:
             class_id = int(box.cls[0])
-            class_name = models.yolo_model.names[class_id]
+            class_name = yolo_model.names[class_id]
             confidence = float(box.conf[0])
             x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
             raw_detections.append({
@@ -53,6 +51,8 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
                 "box": [x1, y1, x2, y2]
             })
             
+    models.unload_yolo() # Free YOLO memory!
+            
     # 3. Process Detections and Keras Inference
     final_detections = remove_duplicate_boxes(raw_detections)
     
@@ -61,6 +61,7 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
     severities = []
     
     if len(final_detections) > 0:
+        keras_model = models.load_keras()
         for det in final_detections:
             x1, y1, x2, y2 = det["box"]
             
@@ -71,7 +72,7 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
                 
             # Keras Prediction
             crop_batch = preprocess_keras_crop(crop)
-            preds = models.keras_model.predict(crop_batch, verbose=0)[0]
+            preds = keras_model.predict(crop_batch, verbose=0)[0]
             severity_idx = int(np.argmax(preds))
             part_severity = settings.SEVERITY_CLASSES[severity_idx]
             
@@ -86,6 +87,8 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
             
             detected_part_names.add(det["class_name"])
             
+        models.unload_keras() # Free Keras memory!
+            
     # 4. Determine Overall Severity
     if not severities:
         overall_severity_str = "No Damage"
@@ -98,8 +101,10 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
     if overall_severity_str == "No Damage":
         claim_amount = 0.0
     else:
+        ml_model = models.load_ml()
         ml_features = prepare_ml_features(list(detected_part_names), overall_severity_str)
-        claim_amount = float(models.ml_model.predict(ml_features)[0])
+        claim_amount = float(ml_model.predict(ml_features)[0])
+        models.unload_ml() # Free ML memory!
         
     # 6. Build Response
     if overall_severity_str == "No Damage":
