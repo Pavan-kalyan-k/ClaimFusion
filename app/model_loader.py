@@ -35,6 +35,18 @@ try:
     keras.layers.InputLayer.__init__ = patched_input
 except Exception:
     pass
+
+# Patch 3: Fix BatchNormalization renorm arguments removed in Keras 3
+try:
+    _orig_bn = keras.layers.BatchNormalization.__init__
+    def patched_bn(self, *args, **kwargs):
+        kwargs.pop('renorm', None)
+        kwargs.pop('renorm_clipping', None)
+        kwargs.pop('renorm_momentum', None)
+        _orig_bn(self, *args, **kwargs)
+    keras.layers.BatchNormalization.__init__ = patched_bn
+except Exception:
+    pass
 # -------------------------------------
 
 from app.config import settings
