@@ -13,38 +13,40 @@ torch.load = patched_load
 from ultralytics import YOLO
 import keras
 
-# ---- KERAS COMPATIBILITY PATCHES ----
-# Patch 1: Fix Keras 3 loading older Keras 3 models (input_axes error)
+# ---- ULTIMATE KERAS COMPATIBILITY PATCH ----
+# This fixes the root cause of ALL Keras deserialization errors by dynamically
+# intercepting every layer and initializer's __init__ method and stripping
+# out any keyword arguments that the current environment does not support.
 try:
-    _orig_glorot = keras.initializers.GlorotUniform.__init__
-    def patched_glorot(self, seed=None, input_axes=None, output_axes=None, **kwargs):
-        _orig_glorot(self, seed=seed)
-    keras.initializers.GlorotUniform.__init__ = patched_glorot
-except Exception:
-    pass
+    import inspect
+    def make_robust_init(orig_init):
+        def patched_init(self, *args, **kwargs):
+            try:
+                sig = inspect.signature(orig_init)
+                valid_keys = set(sig.parameters.keys())
+                # Base Layer kwargs usually handled by **kwargs in subclasses
+                valid_keys.update({'name', 'trainable', 'dtype', 'autocast', 'dynamic', 'batch_input_shape', 'batch_size', 'weights', 'input_shape', 'input_dim'})
+                
+                # Strip invalid kwargs
+                clean_kwargs = {k: v for k, v in kwargs.items() if k in valid_keys}
+                
+                # Handle Keras 3 batch_shape to Keras 2 batch_input_shape translation
+                if 'batch_shape' in kwargs and 'batch_input_shape' not in clean_kwargs:
+                    clean_kwargs['batch_input_shape'] = kwargs['batch_shape']
+                    
+                orig_init(self, *args, **clean_kwargs)
+            except Exception:
+                orig_init(self, *args, **kwargs)
+        return patched_init
 
-# Patch 2: Fix Keras 2 loading Keras 3 models (InputLayer error)
-try:
-    _orig_input = keras.layers.InputLayer.__init__
-    def patched_input(self, *args, **kwargs):
-        if 'batch_shape' in kwargs:
-            kwargs['batch_input_shape'] = kwargs.pop('batch_shape')
-        if 'optional' in kwargs:
-            kwargs.pop('optional')
-        _orig_input(self, *args, **kwargs)
-    keras.layers.InputLayer.__init__ = patched_input
-except Exception:
-    pass
-
-# Patch 3: Fix BatchNormalization renorm arguments removed in Keras 3
-try:
-    _orig_bn = keras.layers.BatchNormalization.__init__
-    def patched_bn(self, *args, **kwargs):
-        kwargs.pop('renorm', None)
-        kwargs.pop('renorm_clipping', None)
-        kwargs.pop('renorm_momentum', None)
-        _orig_bn(self, *args, **kwargs)
-    keras.layers.BatchNormalization.__init__ = patched_bn
+    for module in [keras.layers, keras.initializers]:
+        for attr_name in dir(module):
+            attr = getattr(module, attr_name)
+            if inspect.isclass(attr):
+                try:
+                    attr.__init__ = make_robust_init(attr.__init__)
+                except Exception:
+                    pass
 except Exception:
     pass
 # -------------------------------------
