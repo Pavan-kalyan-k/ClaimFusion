@@ -1,5 +1,14 @@
 import os
+
+# ---- AGGRESSIVE MEMORY AND THREAD LIMITING ----
+# Must be set BEFORE importing PyTorch or TensorFlow to prevent 512MB OOM crash
+os.environ['TF_NUM_INTEROP_THREADS'] = '1'
+os.environ['TF_NUM_INTRAOP_THREADS'] = '1'
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1' # Force CPU for TensorFlow
+# ---------------------------------------------
 
 import joblib
 import torch
