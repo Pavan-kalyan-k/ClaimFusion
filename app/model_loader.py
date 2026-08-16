@@ -3,6 +3,35 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '-1' # Force CPU for TensorFlow
 
 import joblib
 import torch
+import numpy as np
+
+# ---- ULTIMATE NUMPY COMPATIBILITY PATCH ----
+# This fixes the numpy 2.x to numpy 1.x BitGenerator/MT19937 pickle crash
+# by intercepting the random state reconstruction and ignoring the state validation.
+try:
+    from numpy.random import _pickle
+    
+    class FakeRandomState(np.random.RandomState):
+        def __setstate__(self, state):
+            pass
+            
+    _orig_randomstate_ctor = _pickle.__randomstate_ctor
+    def patched_randomstate_ctor(bit_generator_name="MT19937"):
+        return FakeRandomState()
+    _pickle.__randomstate_ctor = patched_randomstate_ctor
+    
+    class FakeBitGenerator:
+        def __setstate__(self, state):
+            pass
+            
+    _orig_bit_generator_ctor = _pickle.__bit_generator_ctor
+    def patched_bit_generator_ctor(bit_generator_name="MT19937"):
+        return FakeBitGenerator()
+    _pickle.__bit_generator_ctor = patched_bit_generator_ctor
+except Exception:
+    pass
+# ---------------------------------------------
+
 # Monkey patch torch.load to bypass weights_only in PyTorch 2.6 for Ultralytics
 _original_load = torch.load
 def patched_load(*args, **kwargs):
