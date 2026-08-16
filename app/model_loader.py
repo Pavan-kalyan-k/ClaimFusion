@@ -27,7 +27,7 @@ class ModelManager:
             
         if self.keras_model is None:
             print("Loading Keras model...")
-            self.keras_model = keras.models.load_model(settings.KERAS_MODEL_PATH)
+            self.keras_model = keras.models.load_model(settings.KERAS_MODEL_PATH, compile=False)
             
         if self.ml_model is None:
             print("Loading ML model...")
