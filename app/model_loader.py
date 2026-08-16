@@ -1,3 +1,6 @@
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1' # Force CPU for TensorFlow
+
 import joblib
 import torch
 # Monkey patch torch.load to bypass weights_only in PyTorch 2.6 for Ultralytics

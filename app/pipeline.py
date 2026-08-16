@@ -32,6 +32,7 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
         source=image_path,
         conf=settings.YOLO_CONF_THRESHOLD,
         iou=settings.YOLO_IOU_THRESHOLD,
+        device="cpu",
         verbose=False
     )
     
