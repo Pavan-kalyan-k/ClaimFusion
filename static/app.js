@@ -75,8 +75,17 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.detail || 'Failed to analyze image');
+                const errorText = await response.text();
+                console.error("AI API failed:", response.status, errorText);
+                
+                let detail = "Failed to analyze image";
+                try {
+                    const errData = JSON.parse(errorText);
+                    detail = errData.detail || detail;
+                } catch(e) {
+                    detail = `Server error: ${response.status}`;
+                }
+                throw new Error(detail);
             }
 
             const data = await response.json();

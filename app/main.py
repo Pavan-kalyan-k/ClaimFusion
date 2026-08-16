@@ -34,12 +34,19 @@ app.add_middleware(
 @app.get("/health")
 def health_check():
     return {
-        "status": "healthy", 
-        "models_loaded": {
-            "yolo": models.yolo_model is not None,
-            "keras": models.keras_model is not None,
-            "ml": models.ml_model is not None
-        }
+        "status": "ok", 
+        "service": "ClaimFusion 360"
+    }
+
+@app.get("/model-status")
+def model_status():
+    def get_status(model_prop):
+        return "loaded" if model_prop is not None else "not_loaded"
+    
+    return {
+        "yolo": get_status(models.yolo_model),
+        "severity": get_status(models.keras_model),
+        "claim": get_status(models.ml_model)
     }
 
 @app.post("/predict", response_model=PredictionResponse)
@@ -56,9 +63,6 @@ async def predict_claim(file: UploadFile = File(...)):
         # Run Pipeline
         response = run_prediction_pipeline(file_path)
         return response
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
         
     finally:
         # Cleanup
