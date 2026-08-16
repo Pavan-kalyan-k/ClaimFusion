@@ -1,0 +1,2532 @@
+
+
+================ car_box.ipynb ================
+
+ !pip install ultralytics
+----------------------------------------
+from ultralytics import YOLO
+----------------------------------------
+import ultralytics
+
+print(ultralytics.__version__)
+----------------------------------------
+!pip install roboflow
+
+from roboflow import Roboflow
+
+rf = Roboflow(api_key="8xAF3ECJP6LFW6K7s6Nf")
+project = rf.workspace("capstone-nh0nc").project("car-damage-detection-t0g92")
+dataset = project.version(1).download("yolov8")
+----------------------------------------
+import os
+
+print(os.listdir("/content"))
+----------------------------------------
+dataset_path = "/content/Car-Damage-Detection-1"
+
+print(os.listdir(dataset_path))
+----------------------------------------
+!cat /content/Car-Damage-Detection-1/data.yaml
+----------------------------------------
+import os
+import matplotlib.pyplot as plt
+from PIL import Image
+
+train_images = os.listdir(
+    "/content/Car-Damage-Detection-1/train/images"
+)
+
+print("Number of training images:", len(train_images))
+
+img_path = "/content/Car-Damage-Detection-1/train/images/" + train_images[1]
+
+img = Image.open(img_path)
+
+plt.figure(figsize=(8, 8))
+plt.imshow(img)
+plt.axis("off")
+plt.show()
+----------------------------------------
+train_labels = os.listdir(
+    "/content/Car-Damage-Detection-1/train/labels"
+)
+
+print("Number of label files:", len(train_labels))
+----------------------------------------
+import os
+from collections import Counter
+import matplotlib.pyplot as plt
+
+# Define label_path at the beginning of the cell
+label_path = "/content/Car-Damage-Detection-1/train/labels"
+
+class_names = [
+    "Door",
+    "Light",
+    "Bonnet",
+    "Bumper",
+    "Dickey",
+    "Fender",
+    "Windshield"
+]
+
+class_count = Counter()
+
+for file in os.listdir(label_path):
+
+    if file.endswith(".txt"):
+
+        with open(os.path.join(label_path, file), "r") as f:
+
+            for line in f:
+                line = line.strip()
+
+                if line:
+                    # Convert to float first, then to int to handle '2.0' as 2
+                    class_id = int(float(line.split()[0]))
+                    class_count[class_id] += 1
+
+print("Class Distribution:")
+for class_id, name in enumerate(class_names):
+    print(f"{name:12} : {class_count[class_id]}")
+
+# Add visualization
+class_labels = [name for name in class_names]
+class_values = [class_count[i] for i in range(len(class_names))]
+
+plt.figure(figsize=(10, 6))
+plt.bar(class_labels, class_values, color='skyblue')
+plt.xlabel('Class Name')
+plt.ylabel('Number of Instances')
+plt.title('Distribution of Object Classes')
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+----------------------------------------
+label_path = "/content/Car-Damage-Detection-1/train/labels/" + train_labels[0]
+
+with open(label_path, "r") as f:
+    print(f.read())
+----------------------------------------
+!pip install -U albumentations
+----------------------------------------
+import os
+import cv2
+import shutil
+import random
+import albumentations as A
+
+train_img_dir = "/content/Car-Damage-Detection-1/train/images"
+train_label_dir = "/content/Car-Damage-Detection-1/train/labels"
+
+----------------------------------------
+class_names = [
+    "Door",
+    "Light",
+    "Bonnet",
+    "Bumper",
+    "Dickey",
+    "Fender",
+    "Windshield"
+]
+
+class_id = {
+    name: i for i, name in enumerate(class_names)
+}
+
+print(class_id)
+----------------------------------------
+target_classes = {
+    0:200,
+    3:100,
+    2: 600,   # Bonnet → target 300
+    4: 300,   # Dickey → target 300
+    6: 400    # Windshield → target 300
+}
+----------------------------------------
+transform = A.Compose(
+    [
+        A.HorizontalFlip(p=0.5),
+
+        A.Rotate(
+            limit=10,
+            p=0.5
+        ),
+
+        A.RandomBrightnessContrast(
+            brightness_limit=0.2,
+            contrast_limit=0.2,
+            p=0.4
+        ),
+
+        A.Affine(
+            scale=(0.9, 1.1),
+            translate_percent=(-0.05, 0.05),
+            p=0.4
+        )
+    ],
+    bbox_params=A.BboxParams(
+        format="yolo",
+        label_fields=["class_labels"]
+    )
+)
+----------------------------------------
+from ultralytics import YOLO
+
+# Re-initialize the model to ensure a clean state for the new training run
+model = YOLO("yolov8n.pt")
+
+results = model.train(
+    data="/content/Car-Damage-Detection-1/data.yaml",
+    epochs=100,
+    imgsz=640,
+    batch=16,
+    name="car_damage_yolov8n",
+    patience=20,
+    degrees=15.0,
+    shear=2.5,
+    scale=0.7,
+    fliplr=0.5,
+    cls_pw=0.5  # Add this parameter to balance class weights
+)
+----------------------------------------
+from ultralytics import YOLO
+
+model = YOLO("yolov8s.pt")
+----------------------------------------
+from ultralytics import YOLO
+
+
+
+results = model.train(
+    data="/content/Car-Damage-Detection-1/data.yaml",
+    epochs=100,
+    imgsz=640,
+    batch=16,
+    name="car_damage_yolov8s",
+    patience=20,
+    degrees=15.0,  # Add rotation
+    shear=2.5,     # Add perspective shear
+    scale=0.7,     # Increase scale range
+    fliplr=0.5     # Horizontal flips
+)
+----------------------------------------
+from IPython.display import Image
+
+Image(
+    filename="/content/runs/detect/car_damage_yolov8n/results.png"
+)
+----------------------------------------
+best_model = YOLO(
+    "/content/runs/detect/car_damage_yolov8s/weights/best.pt"
+)
+----------------------------------------
+from google.colab import drive
+drive.mount('/content/drive')
+----------------------------------------
+metrics = best_model.val()
+----------------------------------------
+results = best_model.predict(
+    source="/content/download.png",
+    conf=0.25,
+    save=True
+)
+----------------------------------------
+results = best_model.predict(
+    source="/content/download.png",
+    conf=0.40,       # Ignore weak detections
+    iou=0.50,        # NMS threshold to remove overlapping boxes
+    save=True,
+    verbose=False
+)
+----------------------------------------
+results2 = best_model.predict(
+    source="/content/abcde.jpg",
+    conf=0.25,
+    save=True
+)
+----------------------------------------
+import os
+print(os.listdir('/content/runs/detect/predict'))
+----------------------------------------
+from IPython.display import Image, display
+
+display(
+    Image(
+        filename="/content/runs/detect/predict/abcde.jpg"
+    )
+)
+----------------------------------------
+from IPython.display import display
+from PIL import Image as PILImage # Alias to avoid name conflict
+import matplotlib.pyplot as plt
+
+# Load the image using PIL
+image_path = "/content/runs/detect/predict/download.jpg"
+img = PILImage.open(image_path)
+
+# Display the image using matplotlib
+plt.figure(figsize=(10, 10))
+plt.imshow(img)
+plt.axis("off")
+plt.show()
+----------------------------------------
+from IPython.display import display
+from PIL import Image as PILImage # Alias to avoid name conflict
+import matplotlib.pyplot as plt
+
+# Load the image using PIL
+image_path = "/content/runs/detect/predict/abcde.jpg"
+img = PILImage.open(image_path)
+
+# Display the image using matplotlib
+plt.figure(figsize=(10, 10))
+plt.imshow(img)
+plt.axis("off")
+plt.show()
+----------------------------------------
+results = best_model.predict(
+    source="/content/download.png",
+    conf=0.25
+)
+
+for result in results:
+
+    for box in result.boxes:
+
+        class_id = int(box.cls[0])
+        confidence = float(box.conf[0])
+
+        class_name = best_model.names[class_id]
+
+        print(
+            f"Damage Part: {class_name}, "
+            f"Confidence: {confidence:.2f}"
+        )
+----------------------------------------
+for result in results:
+
+    for box in result.boxes:
+
+        print("Class:", int(box.cls[0]))
+        print("Confidence:", float(box.conf[0]))
+        print("Bounding Box:", box.xyxy[0].tolist())
+----------------------------------------
+metrics_test = best_model.val(split='test')
+
+print("Test Metrics:")
+print(f"Precision: {metrics_test.box.p[0]:.4f}")
+print(f"Recall: {metrics_test.box.r[0]:.4f}")
+print(f"mAP50: {metrics_test.box.map50:.4f}")
+print(f"mAP50-95: {metrics_test.box.map:.4f}")
+----------------------------------------
+
+
+================ car_severity_corrected (1).ipynb ================
+
+!pip install -q kagglehub
+
+----------------------------------------
+import os
+import kagglehub
+
+# FIX: actually use kagglehub (it was installed but unused in the
+# original notebook, which instead shelled out to the `kaggle` CLI and
+# assumed a hardcoded extraction path). kagglehub handles auth + caching
+# and returns the real path to the downloaded files, so we don't have to
+# guess where the data landed.
+dataset_root = kagglehub.dataset_download("prajwalbhamere/car-damage-severity-dataset")
+print("Dataset downloaded to:", dataset_root)
+
+----------------------------------------
+# FIX: locate the 'data3a' folder dynamically instead of hardcoding
+# '/content/car-damage-severity-dataset/data3a'. kagglehub's cache path
+# includes a version hash that will not match a hardcoded guess.
+def find_dir(root, target_name):
+    for dirpath, dirnames, _ in os.walk(root):
+        if target_name in dirnames:
+            return os.path.join(dirpath, target_name)
+    raise FileNotFoundError(f"Could not find '{target_name}' under {root}")
+
+data3a_path = find_dir(dataset_root, "data3a")
+train_dir = os.path.join(data3a_path, "training")
+val_dir = os.path.join(data3a_path, "validation")
+
+print("data3a path:", data3a_path)
+print("train_dir:", train_dir)
+print("val_dir:", val_dir)
+assert os.path.isdir(train_dir), f"Missing training dir: {train_dir}"
+assert os.path.isdir(val_dir), f"Missing validation dir: {val_dir}"
+
+----------------------------------------
+# FIX: merged what used to be 4 separate, partly-redundant cells
+# (listing dataset root, listing data3a, re-listing training classes,
+# then counting images per class in training and validation
+# separately) into one pass that reports everything at once.
+classes = sorted(
+    d for d in os.listdir(train_dir) if os.path.isdir(os.path.join(train_dir, d))
+)
+print("Classes found:", classes)
+print(f"Total classes: {len(classes)}\n")
+
+for split_name, split_dir in [("training", train_dir), ("validation", val_dir)]:
+    print(f"--- {split_name} ---")
+    for class_name in classes:
+        class_path = os.path.join(split_dir, class_name)
+        if os.path.isdir(class_path):
+            n = len(os.listdir(class_path))
+            print(f"  {class_name}: {n} images")
+        else:
+            print(f"  WARNING: '{class_name}' not found in {split_name}")
+    print()
+
+----------------------------------------
+import random
+import matplotlib.pyplot as plt
+from PIL import Image
+
+# FIX: kept a single version of the "preview sample images" cell
+# (the original had two near-duplicate versions -- one without image
+# dimensions in the title, one with -- this keeps the more informative
+# one and drops the duplicate).
+random.seed(42)
+
+for class_name in classes:
+    class_path = os.path.join(train_dir, class_name)
+    images = [f for f in os.listdir(class_path) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+    selected = random.sample(images, min(3, len(images)))
+
+    plt.figure(figsize=(12, 4))
+    for i, image_name in enumerate(selected):
+        img_path = os.path.join(class_path, image_name)
+        img = Image.open(img_path)
+        width, height = img.size
+
+        plt.subplot(1, 3, i + 1)
+        plt.imshow(img)
+        plt.title(f"{class_name}\n{width} x {height}")
+        plt.axis("off")
+    plt.suptitle(class_name)
+    plt.tight_layout()
+    plt.show()
+
+----------------------------------------
+!pip install -q tensorflow
+
+----------------------------------------
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+IMG_SIZE = (300, 300)
+BATCH_SIZE = 16
+
+# FIX: this augmenting generator was defined in the original notebook
+# but then never actually used -- a *different*, non-augmenting
+# `datagen` was created afterward and used for both train and
+# validation. Here the augmenting generator is the one actually passed
+# to flow_from_directory for training.
+train_datagen = ImageDataGenerator(
+    rescale=1.0 / 255,
+    rotation_range=20,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.15,
+    zoom_range=0.15,
+    horizontal_flip=True,
+    fill_mode="nearest",
+)
+
+# Validation data should only be rescaled, never augmented.
+val_datagen = ImageDataGenerator(rescale=1.0 / 255)
+
+# FIX: use the dataset's real train/validation folders instead of
+# carving an artificial validation split out of the training folder
+# with `validation_split=0.2` (which meant the actual `data3a/validation`
+# folder was downloaded but never used).
+train_generator = train_datagen.flow_from_directory(
+    train_dir,
+    target_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode="categorical",
+    shuffle=True,
+    seed=42,
+)
+
+val_generator = val_datagen.flow_from_directory(
+    val_dir,
+    target_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode="categorical",
+    shuffle=False,
+)
+
+class_names = list(train_generator.class_indices.keys())
+print("Class indices:", train_generator.class_indices)
+
+----------------------------------------
+import numpy as np
+import seaborn as sns
+from sklearn.metrics import classification_report, confusion_matrix
+
+# FIX: these two plotting/reporting blocks were copy-pasted 4-6 times
+# throughout the original notebook (once per model / fine-tuning
+# stage) with only cosmetic differences. Pulling them into functions
+# here means each model's results are produced by a single call below
+# instead of a duplicated block.
+
+def evaluate_model(model, generator, title):
+    """Print loss/accuracy, confusion matrix, and classification report."""
+    loss, acc = model.evaluate(generator, verbose=0)
+    print(f"{title} -- Validation loss: {loss:.4f}, accuracy: {acc:.4f}")
+
+    generator.reset()
+    y_true = generator.classes
+    y_pred_probs = model.predict(generator, verbose=0)
+    y_pred = np.argmax(y_pred_probs, axis=1)
+    labels = list(generator.class_indices.keys())
+
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=labels, yticklabels=labels)
+    plt.title(f"Confusion Matrix -- {title}")
+    plt.xlabel("Predicted Label")
+    plt.ylabel("True Label")
+    plt.show()
+
+    print(f"\nClassification report -- {title}\n")
+    print(classification_report(y_true, y_pred, target_names=labels))
+    return acc
+
+
+def show_sample_predictions(model, generator, num_samples=9):
+    """Show a grid of random predictions vs. actual labels."""
+    generator.reset()
+    x_batch, y_batch_true = next(generator)
+    preds = model.predict(x_batch, verbose=0)
+    labels_map = {v: k for k, v in generator.class_indices.items()}
+
+    n = min(num_samples, len(x_batch))
+    fig, axes = plt.subplots(3, 3, figsize=(12, 12))
+    axes = axes.ravel()
+    for i in range(n):
+        actual_label = labels_map[np.argmax(y_batch_true[i])]
+        pred_label = labels_map[np.argmax(preds[i])]
+        confidence = np.max(preds[i]) * 100
+
+        axes[i].imshow(x_batch[i])
+        axes[i].axis("off")
+        color = "green" if actual_label == pred_label else "red"
+        axes[i].set_title(
+            f"Actual: {actual_label}\nPred: {pred_label} ({confidence:.1f}%)",
+            color=color, fontsize=10, fontweight="bold",
+        )
+    for j in range(n, len(axes)):
+        axes[j].axis("off")
+    plt.tight_layout()
+    plt.show()
+
+----------------------------------------
+import os
+import random
+import numpy as np
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+
+SEED = 42
+os.environ["PYTHONHASHSEED"] = str(SEED)
+random.seed(SEED)
+np.random.seed(SEED)
+tf.random.set_seed(SEED)
+
+tf.config.experimental.enable_op_determinism()
+
+mobilenet_base = MobileNetV2(weights="imagenet", include_top=False, input_shape=(300, 300, 3))
+mobilenet_base.trainable = False
+
+mobilenet_model = Sequential([
+    mobilenet_base,
+    GlobalAveragePooling2D(),
+    Dropout(0.3),
+    Dense(3, activation="softmax"),
+])
+
+mobilenet_model.compile(
+    optimizer="adam",
+    loss="categorical_crossentropy",
+    metrics=["accuracy"],
+)
+mobilenet_model.summary()
+
+----------------------------------------
+# FIX: this training cell was duplicated verbatim later in the original
+# notebook (same code, same callbacks, run a second time on the already
+# -trained model). Kept as a single training run.
+mobilenet_callbacks = [
+    EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=True),
+    ModelCheckpoint("best_mobilenetv2.keras", monitor="val_loss", save_best_only=True),
+]
+
+mobilenet_history = mobilenet_model.fit(
+    train_generator,
+    epochs=20,
+    validation_data=val_generator,
+    callbacks=mobilenet_callbacks,
+    verbose=1,
+)
+
+----------------------------------------
+mobilenet_base_acc = evaluate_model(mobilenet_model, val_generator, "MobileNetV2 (frozen base)")
+show_sample_predictions(mobilenet_model, val_generator)
+
+----------------------------------------
+SEED = 42
+os.environ["PYTHONHASHSEED"] = str(SEED)
+random.seed(SEED)
+np.random.seed(SEED)
+tf.random.set_seed(SEED)
+
+mobilenet_base.trainable = True
+for layer in mobilenet_base.layers[:-15]:
+    layer.trainable = False
+
+mobilenet_model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=5e-6),
+    loss="categorical_crossentropy",
+    metrics=["accuracy"],
+)
+
+mobilenet_ft_callbacks = [
+    EarlyStopping(monitor="val_loss", patience=3, restore_best_weights=True),
+    ModelCheckpoint("best_mobilenetv2_finetuned.keras", monitor="val_loss", save_best_only=True),
+]
+
+mobilenet_ft_history = mobilenet_model.fit(
+    train_generator,
+    epochs=15,
+    validation_data=val_generator,
+    callbacks=mobilenet_ft_callbacks,
+    verbose=1,
+)
+
+----------------------------------------
+mobilenet_ft_acc = evaluate_model(mobilenet_model, val_generator, "MobileNetV2 (fine-tuned)")
+show_sample_predictions(mobilenet_model, val_generator)
+
+----------------------------------------
+from tensorflow.keras.applications import EfficientNetB2
+
+SEED = 42
+os.environ["PYTHONHASHSEED"] = str(SEED)
+random.seed(SEED)
+np.random.seed(SEED)
+tf.random.set_seed(SEED)
+
+efficientnet_base = EfficientNetB2(weights="imagenet", include_top=False, input_shape=(300, 300, 3))
+efficientnet_base.trainable = False
+
+efficientnet_model = Sequential([
+    efficientnet_base,
+    GlobalAveragePooling2D(),
+    Dropout(0.3),
+    Dense(3, activation="softmax"),
+])
+
+efficientnet_model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
+    loss="categorical_crossentropy",
+    metrics=["accuracy"],
+)
+efficientnet_model.summary()
+
+----------------------------------------
+efficientnet_callbacks = [
+    EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=True),
+    ModelCheckpoint("best_efficientnetb2.keras", monitor="val_loss", save_best_only=True),
+]
+
+efficientnet_history = efficientnet_model.fit(
+    train_generator,
+    epochs=20,
+    validation_data=val_generator,
+    callbacks=efficientnet_callbacks,
+    verbose=1,
+)
+
+----------------------------------------
+efficientnet_base_acc = evaluate_model(efficientnet_model, val_generator, "EfficientNetB2 (frozen base)")
+show_sample_predictions(efficientnet_model, val_generator)
+
+----------------------------------------
+efficientnet_base.trainable = True
+for layer in efficientnet_base.layers[:-30]:
+    layer.trainable = False
+
+efficientnet_model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=1e-5),
+    loss="categorical_crossentropy",
+    metrics=["accuracy"],
+)
+
+# FIX: the original notebook reused the *stale* `callbacks` variable
+# here (last defined for the very first MobileNetV2 training run, whose
+# ModelCheckpoint path pointed at a MobileNetV2 filename) instead of a
+# checkpoint path relevant to EfficientNetB2. Given its own callback
+# list with a matching checkpoint filename.
+efficientnet_ft_callbacks = [
+    EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=True),
+    ModelCheckpoint("best_efficientnetb2_finetuned.keras", monitor="val_loss", save_best_only=True),
+]
+
+efficientnet_ft_history = efficientnet_model.fit(
+    train_generator,
+    epochs=10,
+    validation_data=val_generator,
+    callbacks=efficientnet_ft_callbacks,
+    verbose=1,
+)
+
+----------------------------------------
+efficientnet_ft_acc = evaluate_model(efficientnet_model, val_generator, "EfficientNetB2 (fine-tuned)")
+show_sample_predictions(efficientnet_model, val_generator)
+
+----------------------------------------
+import pandas as pd
+
+comparison = pd.DataFrame([
+    {"Model": "MobileNetV2 (frozen base)", "Validation Accuracy": mobilenet_base_acc},
+    {"Model": "MobileNetV2 (fine-tuned)", "Validation Accuracy": mobilenet_ft_acc},
+    {"Model": "EfficientNetB2 (frozen base)", "Validation Accuracy": efficientnet_base_acc},
+    {"Model": "EfficientNetB2 (fine-tuned)", "Validation Accuracy": efficientnet_ft_acc},
+]).sort_values("Validation Accuracy", ascending=False)
+
+print(comparison.to_string(index=False))
+
+----------------------------------------
+import os
+import random
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
+
+# 1. Load the best saved model
+model = load_model('best_mobilenetv2.keras')
+
+# Class mapping (must match train_generator.class_indices)
+class_names = sorted(os.listdir(val_dir))
+idx_to_class = {i: name for i, name in enumerate(class_names)}
+
+plt.figure(figsize=(15, 12))
+plot_index = 1
+
+# 2. Iterate through each class and select 3 random images
+for class_name in class_names:
+    class_path = os.path.join(val_dir, class_name)
+    image_files = [f for f in os.listdir(class_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    selected_files = random.sample(image_files, min(3, len(image_files)))
+    
+    for file_name in selected_files:
+        img_path = os.path.join(class_path, file_name)
+        
+        # Load and preprocess image for prediction
+        img = load_img(img_path, target_size=(300, 300))
+        img_array = img_to_array(img) / 255.0
+        img_batch = np.expand_dims(img_array, axis=0)
+        
+        # Predict
+        preds = model.predict(img_batch, verbose=0)
+        pred_idx = np.argmax(preds[0])
+        pred_label = idx_to_class[pred_idx]
+        confidence = preds[0][pred_idx] * 100
+        
+        # Display image with result
+        plt.subplot(len(class_names), 3, plot_index)
+        plt.imshow(img_array)
+        plt.axis('off')
+        
+        is_correct = (pred_label == class_name)
+        color = 'green' if is_correct else 'red'
+        
+        plt.title(f"Actual: {class_name}\nPred: {pred_label} ({confidence:.1f}%)", 
+                  color=color, fontsize=10, fontweight='bold')
+        plot_index += 1
+
+plt.suptitle("Validation Samples — 3 Per Class", fontsize=16, y=1.02)
+plt.tight_layout()
+plt.show()
+----------------------------------------
+!pip install opencv-python
+
+----------------------------------------
+import os
+import cv2
+import random
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.image import img_to_array
+
+# 1. Load your saved MobileNetV2 severity model
+severity_model = load_model('best_mobilenetv2.keras')
+severity_classes = ['01-minor', '02-moderate', '03-severe']
+
+# 2. Select a random image from your actual validation directory
+random_class = random.choice(os.listdir(val_dir))
+class_dir = os.path.join(val_dir, random_class)
+sample_image_name = random.choice([f for f in os.listdir(class_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+image_path = os.path.join(class_dir, sample_image_name)
+
+# 3. Load the image
+image = cv2.imread(r"C:\Users\91939\Downloads\download (1).png")
+image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+h, w, _ = image_rgb.shape
+
+# 4. Generate example bounding box crops relative to your actual image size
+# (e.g., simulating 2 detected regions based on the image's real width & height)
+detections = [
+    {
+        "label": "front_bumper", 
+        "bbox": [int(w * 0.1), int(h * 0.4), int(w * 0.8), int(h * 0.9)]  # [xmin, ymin, xmax, ymax]
+    },
+    {
+        "label": "headlight", 
+        "bbox": [int(w * 0.2), int(h * 0.2), int(w * 0.5), int(h * 0.5)]
+    }
+]
+
+print(f"--- Evaluated Image: {sample_image_name} (True Overall Class: {random_class}) ---\n")
+
+# 5. Extract cropped regions, predict severity, and print labels
+for det in detections:
+    part_label = det["label"]
+    xmin, ymin, xmax, ymax = det["bbox"]
+    
+    # Crop region from the actual image
+    crop = image_rgb[ymin:ymax, xmin:xmax]
+    if crop.size == 0:
+        continue
+
+    # Preprocess crop to match MobileNetV2 input (300x300, rescaled)
+    resized_crop = cv2.resize(crop, (300, 300))
+    crop_array = img_to_array(resized_crop) / 255.0
+    crop_batch = np.expand_dims(crop_array, axis=0)
+
+    # Predict severity
+    preds = severity_model.predict(crop_batch, verbose=0)[0]
+    predicted_severity = severity_classes[np.argmax(preds)]
+    confidence = np.max(preds) * 100
+
+    print(f"Part: {part_label} | Severity: {predicted_severity} ({confidence:.1f}% confidence)")
+----------------------------------------
+!pip install -q ultralytics
+----------------------------------------
+import ultralytics
+ultralytics.checks()
+----------------------------------------
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+from ultralytics import YOLO
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.image import img_to_array
+
+# 1. Load your MobileNetV2 severity model
+severity_model = load_model('best_mobilenetv2.keras')
+severity_classes = ['01-minor', '02-moderate', '03-severe']
+
+# 2. Load a pre-trained YOLO model for car part detection
+# (This automatically downloads a model fine-tuned on car parts)
+detector = YOLO('keremberke/yolov8n-car-parts-detection') 
+
+# 3. Path to your local/uploaded image
+image_path = r"C:\Users\91939\Downloads\download (1).png"
+
+# Read image
+image = cv2.imread(image_path)
+if image is None:
+    raise FileNotFoundError(f"Could not load image at path: {image_path}")
+
+image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+# 4. Dynamically run Object Detection to get parts & bounding boxes
+results = detector(image_path)[0]
+
+print(f"\n--- Dynamic Damage Severity Analysis ---")
+print(f"Image: {image_path}\n")
+
+# 5. Loop over each dynamically detected part
+for box in results.boxes:
+    # Extract coordinates [xmin, ymin, xmax, ymax]
+    xmin, ymin, xmax, ymax = map(int, box.xyxy[0].tolist())
+    
+    # Get detected part label (e.g., 'door', 'bumper', 'headlight')
+    class_id = int(box.cls[0])
+    part_label = results.names[class_id]
+    
+    # Crop the detected region dynamically
+    crop = image_rgb[ymin:ymax, xmin:xmax]
+    if crop.size == 0:
+        continue
+
+    # Preprocess crop for MobileNetV2 (300x300, normalized)
+    resized_crop = cv2.resize(crop, (300, 300))
+    crop_array = img_to_array(resized_crop) / 255.0
+    crop_batch = np.expand_dims(crop_array, axis=0)
+
+    # Predict severity on the cropped part
+    preds = severity_model.predict(crop_batch, verbose=0)[0]
+    predicted_severity = severity_classes[np.argmax(preds)]
+    confidence = np.max(preds) * 100
+
+    # Output detected part and predicted severity
+    print(f"Part: {part_label:<15} | Severity: {predicted_severity} ({confidence:.1f}% confidence)")
+----------------------------------------
+efficientnet_ft_acc = evaluate_model(efficientnet_model, val_generator, "EfficientNetB2 (fine-tuned)")
+show_sample_predictions(efficientnet_model, val_generator)
+
+----------------------------------------
+# ============================================================
+# 1. INSTALL / IMPORT LIBRARIES
+# ============================================================
+
+!pip install -q ultralytics
+
+from ultralytics import YOLO
+from PIL import Image
+import os
+import matplotlib.pyplot as plt
+
+
+# ============================================================
+# 2. MODEL PATH
+# ============================================================
+
+model_path = r"C:\Users\91939\Downloads\best (2).pt"
+
+# Check whether model exists
+if not os.path.exists(model_path):
+    raise FileNotFoundError(
+        f"Model not found at: {model_path}\n"
+        "Make sure your YOLO training was completed in this Colab session."
+    )
+
+# Load trained YOLO model
+detector = YOLO(model_path)
+
+print("Model loaded successfully!")
+print("Classes:", detector.names)
+
+
+# ============================================================
+# 3. IMAGE PATH
+# ============================================================
+
+image_path = r"C:\Users\91939\Downloads\download (1).png"
+
+if not os.path.exists(image_path):
+    raise FileNotFoundError(
+        f"Image not found at: {image_path}\n"
+        "Upload your image to Colab first."
+    )
+
+print("Image found successfully!")
+
+
+# ============================================================
+# 4. RUN YOLO DETECTION
+# ============================================================
+
+results = detector.predict(
+    source=image_path,
+    conf=0.25,
+    save=True,
+    verbose=False
+)
+
+result = results[0]
+
+
+# ============================================================
+# 5. DISPLAY YOLO DETECTION
+# ============================================================
+
+result_image = result.plot()
+
+plt.figure(figsize=(12, 8))
+plt.imshow(result_image)
+plt.axis("off")
+plt.title("Vehicle Damage Detection")
+plt.show()
+
+
+# ============================================================
+# 6. GET DETECTION INFORMATION
+# ============================================================
+
+boxes = result.boxes
+
+if boxes is None or len(boxes) == 0:
+
+    print("No damage detected.")
+
+else:
+
+    print("\nDetected Objects:")
+    print("-" * 50)
+
+    for i, box in enumerate(boxes):
+
+        class_id = int(box.cls[0])
+        confidence = float(box.conf[0])
+
+        class_name = detector.names[class_id]
+
+        x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+        print(f"Detection {i + 1}")
+        print(f"Part       : {class_name}")
+        print(f"Confidence : {confidence:.2f}")
+        print(
+            f"Bounding Box: "
+            f"({x1:.0f}, {y1:.0f}, {x2:.0f}, {y2:.0f})"
+        )
+        print("-" * 50)
+
+
+# ============================================================
+# 7. CALCULATE DAMAGE AREA
+# ============================================================
+
+image = Image.open(image_path)
+
+image_width, image_height = image.size
+
+image_area = image_width * image_height
+
+total_damage_area = 0
+
+if boxes is not None:
+
+    for box in boxes:
+
+        x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+        width = max(0, x2 - x1)
+        height = max(0, y2 - y1)
+
+        damage_area = width * height
+
+        total_damage_area += damage_area
+
+
+# ============================================================
+# 8. DAMAGE AREA RATIO
+# ============================================================
+
+damage_ratio = total_damage_area / image_area
+
+print("\nImage Information")
+print("-" * 50)
+print(f"Image Width       : {image_width}")
+print(f"Image Height      : {image_height}")
+print(f"Total Image Area  : {image_area}")
+print(f"Damage Area       : {total_damage_area:.0f}")
+print(f"Damage Ratio      : {damage_ratio:.4f}")
+print(f"Damage Percentage  : {damage_ratio * 100:.2f}%")
+
+
+# ============================================================
+# 9. DETERMINE SEVERITY
+# ============================================================
+
+if boxes is None or len(boxes) == 0:
+
+    severity = "No Damage"
+
+elif damage_ratio < 0.05:
+
+    severity = "01-minor"
+
+elif damage_ratio < 0.15:
+
+    severity = "02-moderate"
+
+else:
+
+    severity = "03-severe"
+
+
+# ============================================================
+# 10. FINAL RESULT
+# ============================================================
+
+print("\n" + "=" * 60)
+print("FINAL VEHICLE DAMAGE ASSESSMENT")
+print("=" * 60)
+
+print(f"Damage Severity : {severity}")
+
+if boxes is not None and len(boxes) > 0:
+
+    print("\nDamaged Parts:")
+
+    detected_parts = []
+
+    for box in boxes:
+
+        class_id = int(box.cls[0])
+        class_name = detector.names[class_id]
+
+        if class_name not in detected_parts:
+            detected_parts.append(class_name)
+
+    for part in detected_parts:
+        print(f"  - {part}")
+
+print("=" * 60)
+----------------------------------------
+# ============================================================
+# 1. INSTALL / IMPORT LIBRARIES
+# ============================================================
+
+!pip install -q ultralytics
+
+from ultralytics import YOLO
+from PIL import Image
+import os
+import matplotlib.pyplot as plt
+
+
+# ============================================================
+# 2. MODEL PATH
+# ============================================================
+
+model_path = r"C:\Users\91939\Downloads\best (2).pt"
+
+# Check whether model exists
+if not os.path.exists(model_path):
+    raise FileNotFoundError(
+        f"Model not found at: {model_path}\n"
+        "Make sure your YOLO training was completed in this Colab session."
+    )
+
+# Load trained YOLO model
+detector = YOLO(model_path)
+
+print("Model loaded successfully!")
+print("Classes:", detector.names)
+
+
+# ============================================================
+# 3. IMAGE PATH
+# ============================================================
+
+image_path = r"C:\Users\91939\Downloads\download (1).png"
+
+if not os.path.exists(image_path):
+    raise FileNotFoundError(
+        f"Image not found at: {image_path}\n"
+        "Upload your image to Colab first."
+    )
+
+print("Image found successfully!")
+
+
+# ============================================================
+# 4. RUN YOLO DETECTION
+# ============================================================
+
+results = detector.predict(
+    source=image_path,
+    conf=0.25,
+    save=True,
+    verbose=False
+)
+
+result = results[0]
+
+
+# ============================================================
+# 5. SELECT HIGHEST CONFIDENCE BOX FOR DUPLICATE CLASSES
+# ============================================================
+
+boxes = result.boxes
+
+best_boxes = {}
+
+if boxes is not None and len(boxes) > 0:
+
+    for box in boxes:
+
+        class_id = int(box.cls[0])
+        confidence = float(box.conf[0])
+        class_name = detector.names[class_id]
+
+        # If class is appearing for the first time
+        if class_name not in best_boxes:
+
+            best_boxes[class_name] = box
+
+        # If duplicate class exists, keep higher confidence
+        else:
+
+            old_confidence = float(best_boxes[class_name].conf[0])
+
+            if confidence > old_confidence:
+
+                best_boxes[class_name] = box
+
+
+# ============================================================
+# 6. DISPLAY YOLO DETECTION
+# ============================================================
+
+# Create image copy for displaying only selected boxes
+result_image = Image.open(image_path).convert("RGB")
+
+plt.figure(figsize=(12, 8))
+
+plt.imshow(result_image)
+
+ax = plt.gca()
+
+
+for class_name, box in best_boxes.items():
+
+    confidence = float(box.conf[0])
+
+    x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+    # Draw bounding box
+    rectangle = plt.Rectangle(
+        (x1, y1),
+        x2 - x1,
+        y2 - y1,
+        fill=False,
+        linewidth=3
+    )
+
+    ax.add_patch(rectangle)
+
+    # Draw label
+    ax.text(
+        x1,
+        y1,
+        f"{class_name} {confidence:.2f}",
+        fontsize=12,
+        verticalalignment="bottom",
+        bbox=dict(alpha=0.7)
+    )
+
+
+plt.axis("off")
+plt.title("Vehicle Damage Detection")
+plt.show()
+
+
+# ============================================================
+# 7. GET DETECTION INFORMATION
+# ============================================================
+
+if len(best_boxes) == 0:
+
+    print("No damage detected.")
+
+else:
+
+    print("\nDetected Objects:")
+    print("-" * 50)
+
+    for i, (class_name, box) in enumerate(
+        best_boxes.items(),
+        start=1
+    ):
+
+        confidence = float(box.conf[0])
+
+        x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+        print(f"Detection {i}")
+        print(f"Part       : {class_name}")
+        print(f"Confidence : {confidence:.2f}")
+        print(
+            f"Bounding Box: "
+            f"({x1:.0f}, {y1:.0f}, {x2:.0f}, {y2:.0f})"
+        )
+        print("-" * 50)
+
+
+# ============================================================
+# 8. CALCULATE DAMAGE AREA
+# ============================================================
+
+image = Image.open(image_path)
+
+image_width, image_height = image.size
+
+image_area = image_width * image_height
+
+total_damage_area = 0
+
+
+# IMPORTANT:
+# Use best_boxes instead of boxes
+# so duplicate detections are NOT counted
+
+for class_name, box in best_boxes.items():
+
+    x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+    width = max(0, x2 - x1)
+    height = max(0, y2 - y1)
+
+    damage_area = width * height
+
+    total_damage_area += damage_area
+
+
+# ============================================================
+# 9. DAMAGE AREA RATIO
+# ============================================================
+
+damage_ratio = total_damage_area / image_area
+
+print("\nImage Information")
+print("-" * 50)
+print(f"Image Width       : {image_width}")
+print(f"Image Height      : {image_height}")
+print(f"Total Image Area  : {image_area}")
+print(f"Damage Area       : {total_damage_area:.0f}")
+print(f"Damage Ratio      : {damage_ratio:.4f}")
+print(f"Damage Percentage  : {damage_ratio * 100:.2f}%")
+
+
+# ============================================================
+# 10. DETERMINE SEVERITY
+# ============================================================
+
+if len(best_boxes) == 0:
+
+    severity = "No Damage"
+
+elif damage_ratio < 0.05:
+
+    severity = "01-minor"
+
+elif damage_ratio < 0.15:
+
+    severity = "02-moderate"
+
+else:
+
+    severity = "03-severe"
+
+
+# ============================================================
+# 11. FINAL RESULT
+# ============================================================
+
+print("\n" + "=" * 60)
+print("FINAL VEHICLE DAMAGE ASSESSMENT")
+print("=" * 60)
+
+print(f"Damage Severity : {severity}")
+
+if len(best_boxes) > 0:
+
+    print("\nDamaged Parts:")
+
+    detected_parts = []
+
+    for class_name in best_boxes.keys():
+
+        if class_name not in detected_parts:
+
+            detected_parts.append(class_name)
+
+    for part in detected_parts:
+
+        print(f"  - {part}")
+
+print("=" * 60)
+----------------------------------------
+# ============================================================
+# 1. INSTALL / IMPORT LIBRARIES
+# ============================================================
+
+!pip install -q ultralytics
+
+from ultralytics import YOLO
+from PIL import Image
+import os
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+
+
+# ============================================================
+# 2. MODEL PATH
+# ============================================================
+
+model_path = r"C:\Users\91939\Downloads\best (2).pt"
+
+if not os.path.exists(model_path):
+    raise FileNotFoundError(
+        f"Model not found at: {model_path}"
+    )
+
+detector = YOLO(model_path)
+
+print("Model loaded successfully!")
+print("Classes:", detector.names)
+
+
+# ============================================================
+# 3. IMAGE PATH
+# ============================================================
+
+image_path = r"C:\Users\91939\Downloads\download (1).png"
+
+if not os.path.exists(image_path):
+    raise FileNotFoundError(
+        f"Image not found at: {image_path}"
+    )
+
+print("Image found successfully!")
+
+
+# ============================================================
+# 4. RUN YOLO DETECTION
+# ============================================================
+
+results = detector.predict(
+    source=image_path,
+    conf=0.25,
+    iou=0.45,
+    verbose=False
+)
+
+result = results[0]
+
+boxes = result.boxes
+
+
+# ============================================================
+# 5. SELECT BEST BOX FOR EACH CLASS
+# ============================================================
+
+best_boxes = {}
+
+if boxes is not None and len(boxes) > 0:
+
+    for box in boxes:
+
+        class_id = int(box.cls[0])
+        class_name = detector.names[class_id]
+        confidence = float(box.conf[0])
+
+        # First detection of this class
+        if class_name not in best_boxes:
+
+            best_boxes[class_name] = box
+
+        # Same class detected again
+        else:
+
+            previous_confidence = float(
+                best_boxes[class_name].conf[0]
+            )
+
+            # Keep only the highest confidence box
+            if confidence > previous_confidence:
+
+                best_boxes[class_name] = box
+
+
+# ============================================================
+# 6. DISPLAY SELECTED BOXES
+# ============================================================
+
+image = Image.open(image_path).convert("RGB")
+
+plt.figure(figsize=(12, 8))
+
+plt.imshow(image)
+
+ax = plt.gca()
+
+
+for class_name, box in best_boxes.items():
+
+    confidence = float(box.conf[0])
+
+    x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+    width = x2 - x1
+    height = y2 - y1
+
+    rectangle = patches.Rectangle(
+        (x1, y1),
+        width,
+        height,
+        fill=False,
+        linewidth=3
+    )
+
+    ax.add_patch(rectangle)
+
+    ax.text(
+        x1,
+        y1,
+        f"{class_name} {confidence:.2f}",
+        fontsize=12,
+        verticalalignment="bottom",
+        bbox=dict(alpha=0.7)
+    )
+
+
+plt.axis("off")
+plt.title("Vehicle Damage Detection")
+plt.show()
+
+
+# ============================================================
+# 7. GET DETECTION INFORMATION
+# ============================================================
+
+if len(best_boxes) == 0:
+
+    print("No damage detected.")
+
+else:
+
+    print("\nDetected Objects:")
+    print("-" * 50)
+
+    for i, (class_name, box) in enumerate(
+        best_boxes.items(),
+        start=1
+    ):
+
+        confidence = float(box.conf[0])
+
+        x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+        print(f"Detection {i}")
+        print(f"Part       : {class_name}")
+        print(f"Confidence : {confidence:.2f}")
+
+        print(
+            f"Bounding Box: "
+            f"({x1:.0f}, {y1:.0f}, {x2:.0f}, {y2:.0f})"
+        )
+
+        print("-" * 50)
+
+
+# ============================================================
+# 8. CALCULATE DAMAGE AREA
+# ============================================================
+
+image_width, image_height = image.size
+
+image_area = image_width * image_height
+
+total_damage_area = 0
+
+
+for class_name, box in best_boxes.items():
+
+    x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+    width = max(0, x2 - x1)
+    height = max(0, y2 - y1)
+
+    damage_area = width * height
+
+    total_damage_area += damage_area
+
+
+# ============================================================
+# 9. DAMAGE AREA RATIO
+# ============================================================
+
+damage_ratio = total_damage_area / image_area
+
+print("\nImage Information")
+print("-" * 50)
+
+print(f"Image Width       : {image_width}")
+print(f"Image Height      : {image_height}")
+print(f"Total Image Area  : {image_area}")
+print(f"Damage Area       : {total_damage_area:.0f}")
+print(f"Damage Ratio      : {damage_ratio:.4f}")
+print(f"Damage Percentage : {damage_ratio * 100:.2f}%")
+
+
+# ============================================================
+# 10. DETERMINE SEVERITY
+# ============================================================
+
+if len(best_boxes) == 0:
+
+    severity = "No Damage"
+
+elif damage_ratio < 0.05:
+
+    severity = "01-minor"
+
+elif damage_ratio < 0.15:
+
+    severity = "02-moderate"
+
+else:
+
+    severity = "03-severe"
+
+
+# ============================================================
+# 11. FINAL RESULT
+# ============================================================
+
+print("\n" + "=" * 60)
+print("FINAL VEHICLE DAMAGE ASSESSMENT")
+print("=" * 60)
+
+print(f"Damage Severity : {severity}")
+
+
+if len(best_boxes) > 0:
+
+    print("\nDamaged Parts:")
+
+    for class_name in best_boxes.keys():
+
+        print(f"  - {class_name}")
+
+else:
+
+    print("\nDamaged Parts:")
+    print("  - None")
+
+
+print("=" * 60)
+----------------------------------------
+# ============================================================
+# CHECK RAW YOLO PREDICTIONS
+# ============================================================
+
+results = detector.predict(
+    source=image_path,
+    conf=0.05,       # VERY LOW threshold for testing
+    iou=0.45,
+    verbose=False
+)
+
+result = results[0]
+
+print("\n" + "=" * 60)
+print("RAW YOLO DETECTIONS")
+print("=" * 60)
+
+if result.boxes is None or len(result.boxes) == 0:
+
+    print("NO DETECTIONS FOUND")
+
+else:
+
+    for i, box in enumerate(result.boxes):
+
+        class_id = int(box.cls[0])
+        confidence = float(box.conf[0])
+        class_name = detector.names[class_id]
+
+        x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+        print(f"\nDetection {i + 1}")
+        print(f"Class ID    : {class_id}")
+        print(f"Class Name  : {class_name}")
+        print(f"Confidence  : {confidence:.4f}")
+        print(
+            f"Box         : "
+            f"({x1:.0f}, {y1:.0f}, {x2:.0f}, {y2:.0f})"
+        )
+
+print("\n" + "=" * 60)
+print("MODEL CLASSES")
+print("=" * 60)
+
+print(detector.names)
+----------------------------------------
+# ============================================================
+# 4. RUN YOLO DETECTION
+# ============================================================
+
+results = detector.predict(
+    source=image_path,
+    conf=0.05,       # Keep low-confidence detections for now
+    iou=0.45,
+    verbose=False
+)
+
+result = results[0]
+
+boxes = result.boxes
+
+
+# ============================================================
+# 5. REMOVE DUPLICATE BOXES USING IoU
+# ============================================================
+
+def calculate_iou(box1, box2):
+
+    x1 = max(box1[0], box2[0])
+    y1 = max(box1[1], box2[1])
+
+    x2 = min(box1[2], box2[2])
+    y2 = min(box1[3], box2[3])
+
+    intersection_width = max(0, x2 - x1)
+    intersection_height = max(0, y2 - y1)
+
+    intersection_area = (
+        intersection_width * intersection_height
+    )
+
+    area1 = (
+        (box1[2] - box1[0]) *
+        (box1[3] - box1[1])
+    )
+
+    area2 = (
+        (box2[2] - box2[0]) *
+        (box2[3] - box2[1])
+    )
+
+    union_area = area1 + area2 - intersection_area
+
+    if union_area == 0:
+        return 0
+
+    return intersection_area / union_area
+
+
+# Store detections
+detections = []
+
+if boxes is not None and len(boxes) > 0:
+
+    for box in boxes:
+
+        class_id = int(box.cls[0])
+        class_name = detector.names[class_id]
+
+        confidence = float(box.conf[0])
+
+        x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+        detections.append({
+            "class_id": class_id,
+            "class_name": class_name,
+            "confidence": confidence,
+            "box": [x1, y1, x2, y2]
+        })
+
+
+# ============================================================
+# 6. SORT BY CONFIDENCE
+# ============================================================
+
+detections = sorted(
+    detections,
+    key=lambda x: x["confidence"],
+    reverse=True
+)
+
+
+# ============================================================
+# 7. REMOVE ONLY OVERLAPPING DUPLICATES
+# ============================================================
+
+final_detections = []
+
+IOU_THRESHOLD = 0.30
+
+for detection in detections:
+
+    keep = True
+
+    for selected in final_detections:
+
+        # Only compare boxes belonging to same class
+        if detection["class_id"] == selected["class_id"]:
+
+            iou = calculate_iou(
+                detection["box"],
+                selected["box"]
+            )
+
+            # If heavily overlapping, consider duplicate
+            if iou > IOU_THRESHOLD:
+
+                keep = False
+                break
+
+    if keep:
+
+        final_detections.append(detection)
+
+
+# ============================================================
+# 8. DISPLAY FINAL DETECTIONS
+# ============================================================
+
+image = Image.open(image_path).convert("RGB")
+
+plt.figure(figsize=(12, 8))
+
+plt.imshow(image)
+
+ax = plt.gca()
+
+
+for detection in final_detections:
+
+    class_name = detection["class_name"]
+    confidence = detection["confidence"]
+
+    x1, y1, x2, y2 = detection["box"]
+
+    width = x2 - x1
+    height = y2 - y1
+
+    rectangle = plt.Rectangle(
+        (x1, y1),
+        width,
+        height,
+        fill=False,
+        linewidth=3
+    )
+
+    ax.add_patch(rectangle)
+
+    ax.text(
+        x1,
+        y1,
+        f"{class_name} {confidence:.2f}",
+        fontsize=12,
+        verticalalignment="bottom",
+        bbox=dict(alpha=0.7)
+    )
+
+
+plt.axis("off")
+plt.title("Vehicle Damage Detection")
+plt.show()
+
+
+# ============================================================
+# 9. PRINT FINAL DETECTIONS
+# ============================================================
+
+print("\n" + "=" * 60)
+print("FINAL DETECTIONS AFTER DUPLICATE REMOVAL")
+print("=" * 60)
+
+for i, detection in enumerate(final_detections, start=1):
+
+    print(f"\nDetection {i}")
+
+    print(
+        f"Part       : "
+        f"{detection['class_name']}"
+    )
+
+    print(
+        f"Confidence : "
+        f"{detection['confidence']:.2f}"
+    )
+
+    x1, y1, x2, y2 = detection["box"]
+
+    print(
+        f"Bounding Box: "
+        f"({x1:.0f}, {y1:.0f}, "
+        f"{x2:.0f}, {y2:.0f})"
+    )
+
+    print("-" * 50)
+----------------------------------------
+# ============================================================
+# 1. INSTALL / IMPORT LIBRARIES
+# ============================================================
+
+!pip install -q ultralytics
+
+from ultralytics import YOLO
+from PIL import Image
+import os
+import matplotlib.pyplot as plt
+
+
+# ============================================================
+# 2. MODEL PATH
+# ============================================================
+
+model_path = r"C:\Users\91939\Downloads\best (2).pt"
+
+# Check whether model exists
+if not os.path.exists(model_path):
+    raise FileNotFoundError(
+        f"Model not found at: {model_path}"
+    )
+
+# Load trained YOLO model
+detector = YOLO(model_path)
+
+print("Model loaded successfully!")
+print("Classes:", detector.names)
+
+
+# ============================================================
+# 3. IMAGE PATH
+# ============================================================
+
+image_path = r"C:\Users\91939\Downloads\download (1).png"
+
+if not os.path.exists(image_path):
+    raise FileNotFoundError(
+        f"Image not found at: {image_path}"
+    )
+
+print("Image found successfully!")
+
+
+# ============================================================
+# 4. RUN YOLO DETECTION
+# ============================================================
+
+# Use low confidence so that valid parts are not removed
+# during the initial detection stage.
+
+results = detector.predict(
+    source=image_path,
+    conf=0.05,
+    iou=0.45,
+    verbose=False
+)
+
+result = results[0]
+
+boxes = result.boxes
+
+
+# ============================================================
+# 5. IoU FUNCTION
+# ============================================================
+
+def calculate_iou(box1, box2):
+
+    # Coordinates of intersection
+    x1 = max(box1[0], box2[0])
+    y1 = max(box1[1], box2[1])
+
+    x2 = min(box1[2], box2[2])
+    y2 = min(box1[3], box2[3])
+
+    # Intersection dimensions
+    intersection_width = max(0, x2 - x1)
+    intersection_height = max(0, y2 - y1)
+
+    intersection_area = (
+        intersection_width * intersection_height
+    )
+
+    # Area of first box
+    area1 = (
+        max(0, box1[2] - box1[0]) *
+        max(0, box1[3] - box1[1])
+    )
+
+    # Area of second box
+    area2 = (
+        max(0, box2[2] - box2[0]) *
+        max(0, box2[3] - box2[1])
+    )
+
+    # Union
+    union_area = area1 + area2 - intersection_area
+
+    if union_area == 0:
+        return 0
+
+    return intersection_area / union_area
+
+
+# ============================================================
+# 6. GET RAW DETECTIONS
+# ============================================================
+
+detections = []
+
+if boxes is not None and len(boxes) > 0:
+
+    for box in boxes:
+
+        class_id = int(box.cls[0])
+
+        class_name = detector.names[class_id]
+
+        confidence = float(box.conf[0])
+
+        x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+        detections.append({
+            "class_id": class_id,
+            "class_name": class_name,
+            "confidence": confidence,
+            "box": [x1, y1, x2, y2]
+        })
+
+
+# ============================================================
+# 7. PRINT RAW DETECTIONS
+# ============================================================
+
+print("\n" + "=" * 60)
+print("RAW YOLO DETECTIONS")
+print("=" * 60)
+
+if len(detections) == 0:
+
+    print("No detections found.")
+
+else:
+
+    for i, detection in enumerate(detections, start=1):
+
+        print(f"\nDetection {i}")
+        print(
+            f"Part       : "
+            f"{detection['class_name']}"
+        )
+
+        print(
+            f"Confidence : "
+            f"{detection['confidence']:.4f}"
+        )
+
+        x1, y1, x2, y2 = detection["box"]
+
+        print(
+            f"Bounding Box: "
+            f"({x1:.0f}, {y1:.0f}, "
+            f"{x2:.0f}, {y2:.0f})"
+        )
+
+
+# ============================================================
+# 8. SORT BY CONFIDENCE
+# ============================================================
+
+detections = sorted(
+    detections,
+    key=lambda x: x["confidence"],
+    reverse=True
+)
+
+
+# ============================================================
+# 9. REMOVE DUPLICATES USING IoU
+# ============================================================
+
+# Higher value = more overlap required before
+# boxes are considered duplicates.
+
+IOU_THRESHOLD = 0.30
+
+final_detections = []
+
+
+for detection in detections:
+
+    keep = True
+
+    for selected in final_detections:
+
+        # Compare only same classes
+        if detection["class_id"] == selected["class_id"]:
+
+            iou = calculate_iou(
+                detection["box"],
+                selected["box"]
+            )
+
+            # Same class + high overlap = duplicate
+            if iou > IOU_THRESHOLD:
+
+                keep = False
+
+                break
+
+    if keep:
+
+        final_detections.append(detection)
+
+
+# ============================================================
+# 10. PRINT FINAL DETECTIONS
+# ============================================================
+
+print("\n" + "=" * 60)
+print("FINAL DETECTIONS AFTER DUPLICATE REMOVAL")
+print("=" * 60)
+
+if len(final_detections) == 0:
+
+    print("No damage detected.")
+
+else:
+
+    for i, detection in enumerate(
+        final_detections,
+        start=1
+    ):
+
+        print(f"\nDetection {i}")
+
+        print(
+            f"Part       : "
+            f"{detection['class_name']}"
+        )
+
+        print(
+            f"Confidence : "
+            f"{detection['confidence']:.2f}"
+        )
+
+        x1, y1, x2, y2 = detection["box"]
+
+        print(
+            f"Bounding Box: "
+            f"({x1:.0f}, {y1:.0f}, "
+            f"{x2:.0f}, {y2:.0f})"
+        )
+
+        print("-" * 50)
+
+
+# ============================================================
+# 11. LOAD IMAGE
+# ============================================================
+
+image = Image.open(image_path).convert("RGB")
+
+image_width, image_height = image.size
+
+
+# ============================================================
+# 12. DISPLAY FINAL DETECTIONS
+# ============================================================
+
+plt.figure(figsize=(12, 8))
+
+plt.imshow(image)
+
+ax = plt.gca()
+
+
+for detection in final_detections:
+
+    class_name = detection["class_name"]
+
+    confidence = detection["confidence"]
+
+    x1, y1, x2, y2 = detection["box"]
+
+    width = x2 - x1
+    height = y2 - y1
+
+    # Draw rectangle
+    rectangle = plt.Rectangle(
+        (x1, y1),
+        width,
+        height,
+        fill=False,
+        linewidth=3
+    )
+
+    ax.add_patch(rectangle)
+
+    # Draw class name + confidence
+    ax.text(
+        x1,
+        y1,
+        f"{class_name} {confidence:.2f}",
+        fontsize=12,
+        verticalalignment="bottom",
+        bbox=dict(alpha=0.7)
+    )
+
+
+plt.axis("off")
+
+plt.title("Vehicle Damage Detection")
+
+plt.show()
+
+
+# ============================================================
+# 13. CALCULATE DAMAGE AREA
+# ============================================================
+
+image_area = image_width * image_height
+
+total_damage_area = 0
+
+
+for detection in final_detections:
+
+    x1, y1, x2, y2 = detection["box"]
+
+    width = max(0, x2 - x1)
+
+    height = max(0, y2 - y1)
+
+    damage_area = width * height
+
+    total_damage_area += damage_area
+
+
+# ============================================================
+# 14. DAMAGE AREA RATIO
+# ============================================================
+
+if image_area > 0:
+
+    damage_ratio = (
+        total_damage_area /
+        image_area
+    )
+
+else:
+
+    damage_ratio = 0
+
+
+damage_percentage = damage_ratio * 100
+
+
+print("\n" + "=" * 60)
+print("IMAGE INFORMATION")
+print("=" * 60)
+
+print(f"Image Width        : {image_width}")
+print(f"Image Height       : {image_height}")
+print(f"Total Image Area   : {image_area}")
+print(f"Damage Area        : {total_damage_area:.0f}")
+print(f"Damage Ratio       : {damage_ratio:.4f}")
+print(f"Damage Percentage  : {damage_percentage:.2f}%")
+
+
+# ============================================================
+# 15. DETERMINE DAMAGE SEVERITY
+# ============================================================
+
+if len(final_detections) == 0:
+
+    severity = "No Damage"
+
+elif damage_ratio < 0.05:
+
+    severity = "01-minor"
+
+elif damage_ratio < 0.15:
+
+    severity = "02-moderate"
+
+else:
+
+    severity = "03-severe"
+
+
+# ============================================================
+# 16. GET DAMAGED PARTS
+# ============================================================
+
+detected_parts = []
+
+for detection in final_detections:
+
+    class_name = detection["class_name"]
+
+    if class_name not in detected_parts:
+
+        detected_parts.append(class_name)
+
+
+# ============================================================
+# 17. FINAL VEHICLE DAMAGE ASSESSMENT
+# ============================================================
+
+print("\n" + "=" * 60)
+print("FINAL VEHICLE DAMAGE ASSESSMENT")
+print("=" * 60)
+
+print(f"Damage Severity : {severity}")
+
+
+if len(detected_parts) > 0:
+
+    print("\nDamaged Parts:")
+
+    for part in detected_parts:
+
+        print(f"  - {part}")
+
+else:
+
+    print("\nDamaged Parts:")
+
+    print("  - None")
+
+
+print("=" * 60)
+
+
+# ============================================================
+# 18. SAVE FINAL IMAGE
+# ============================================================
+
+output_path = r"C:\Users\91939\Downloads\car_damage_result.jpg"
+
+plt.figure(figsize=(12, 8))
+
+plt.imshow(image)
+
+ax = plt.gca()
+
+
+for detection in final_detections:
+
+    class_name = detection["class_name"]
+
+    confidence = detection["confidence"]
+
+    x1, y1, x2, y2 = detection["box"]
+
+    width = x2 - x1
+
+    height = y2 - y1
+
+    rectangle = plt.Rectangle(
+        (x1, y1),
+        width,
+        height,
+        fill=False,
+        linewidth=3
+    )
+
+    ax.add_patch(rectangle)
+
+    ax.text(
+        x1,
+        y1,
+        f"{class_name} {confidence:.2f}",
+        fontsize=12,
+        verticalalignment="bottom",
+        bbox=dict(alpha=0.7)
+    )
+
+
+plt.axis("off")
+
+plt.tight_layout()
+
+plt.savefig(
+    output_path,
+    bbox_inches="tight",
+    dpi=150
+)
+
+plt.show()
+
+plt.close()
+
+
+print("\nResult image saved to:")
+print(output_path)
+----------------------------------------
+
+
+================ car_ml.ipynb ================
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as ans
+----------------------------------------
+df=pd.read_csv("/content/car_insurance_claims_dataset.csv")
+----------------------------------------
+df.head()
+----------------------------------------
+df['severity']=df['severity'].map({'medium':'moderate','high':'severe','low':'minor'})
+----------------------------------------
+df.head()
+----------------------------------------
+df.columns
+----------------------------------------
+df.drop(['claim_id','damage_score','estimated_repair_cost'],axis=1,inplace=True)
+----------------------------------------
+df.head()
+----------------------------------------
+df.shape
+----------------------------------------
+df.isnull().sum()
+----------------------------------------
+df["severity"].value_counts()
+----------------------------------------
+ax = df["total_parts_damaged"].value_counts().plot(kind="bar")
+ax.set_xticklabels(ax.get_xticklabels(),rotation=45)
+for p in ax.patches:
+    ax.annotate(f'{p.get_height()}', (p.get_x() + p.get_width() / 2., p.get_height()), ha='center', va='baseline', fontsize=10, color='black', xytext=(0, 5), textcoords='offset points')
+
+plt.show()
+----------------------------------------
+df.columns
+----------------------------------------
+severity_counts = df['severity'].value_counts()
+plt.pie(severity_counts, labels=severity_counts.index, autopct='%1.1f%%', startangle=90)
+plt.title('Distribution of Severity')
+plt.show()
+----------------------------------------
+df.head()
+----------------------------------------
+from sklearn.model_selection import train_test_split
+----------------------------------------
+x=df.drop("insurance_payout",axis=1)
+----------------------------------------
+y=df["insurance_payout"]
+----------------------------------------
+x_train,x_test,y_train,y_test=train_test_split(x,y,test_size=0.2,random_state=42)
+----------------------------------------
+from sklearn.preprocessing import LabelEncoder
+----------------------------------------
+le = LabelEncoder()
+x_train['severity'] = le.fit_transform(x_train['severity'])
+x_test['severity'] = le.transform(x_test['severity'])
+----------------------------------------
+from sklearn.ensemble import RandomForestRegressor
+----------------------------------------
+rfr=RandomForestRegressor()
+----------------------------------------
+rfr.fit(x_train,y_train)
+----------------------------------------
+rfr_pred=rfr.predict(x_test)
+----------------------------------------
+print("Train Accuracy:",rfr.score(x_train,y_train))
+print("Test Accuracy:",rfr.score(x_test,y_test))
+----------------------------------------
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+mae = mean_absolute_error(y_test, rfr_pred)
+mse = mean_squared_error(y_test, rfr_pred)
+rmse = np.sqrt(mse)
+r2 = r2_score(y_test, rfr_pred)
+
+print(f"Mean Absolute Error (MAE): {mae:.2f}")
+print(f"Mean Squared Error (MSE): {mse:.2f}")
+print(f"Root Mean Squared Error (RMSE): {rmse:.2f}")
+print(f"R-squared (R2): {r2:.2f}")
+----------------------------------------
+from sklearn.ensemble import GradientBoostingRegressor
+
+gbr = GradientBoostingRegressor(random_state=42)
+gbr.fit(x_train, y_train)
+----------------------------------------
+gbr_pred = gbr.predict(x_test)
+----------------------------------------
+print("Train Accuracy:",gbr.score(x_train,y_train))
+print("Test Accuracy:",gbr.score(x_test,y_test))
+----------------------------------------
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+mae_gbr = mean_absolute_error(y_test, gbr_pred)
+mse_gbr = mean_squared_error(y_test, gbr_pred)
+rmse_gbr = np.sqrt(mse_gbr)
+r2_gbr = r2_score(y_test, gbr_pred)
+
+print(f"Gradient Boosting Regressor Metrics:")
+print(f"Mean Absolute Error (MAE): {mae_gbr:.2f}")
+print(f"Mean Squared Error (MSE): {mse_gbr:.2f}")
+print(f"Root Mean Squared Error (RMSE): {rmse_gbr:.2f}")
+print(f"R-squared (R2): {r2_gbr:.2f}")
+----------------------------------------
+from sklearn.linear_model import LinearRegression
+lr=LinearRegression()
+lr.fit(x_train,y_train)
+----------------------------------------
+lr_pred = lr.predict(x_test)
+----------------------------------------
+print("Train Accuracy:",lr.score(x_train,y_train))
+print("Test Accuracy:",lr.score(x_test,y_test))
+----------------------------------------
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+mae_lr = mean_absolute_error(y_test, lr_pred)
+mse_lr = mean_squared_error(y_test, lr_pred)
+rmse_lr = np.sqrt(mse_lr)
+r2_lr = r2_score(y_test, lr_pred)
+
+print(f"Gradient Boosting Regressor Metrics:")
+print(f"Mean Absolute Error (MAE): {mae_lr:.2f}")
+print(f"Mean Squared Error (MSE): {mse_lr:.2f}")
+print(f"Root Mean Squared Error (RMSE): {rmse_lr:.2f}")
+print(f"R-squared (R2): {r2_lr:.2f}")
+----------------------------------------
+from sklearn.ensemble import AdaBoostRegressor
+
+abr = AdaBoostRegressor(random_state=42)
+abr.fit(x_train, y_train)
+----------------------------------------
+abr_pred = abr.predict(x_test)
+----------------------------------------
+print("Train Accuracy:",abr.score(x_train,y_train))
+print("Test Accuracy:",abr.score(x_test,y_test))
+----------------------------------------
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+mae_abr = mean_absolute_error(y_test, abr_pred)
+mse_abr = mean_squared_error(y_test, abr_pred)
+rmse_abr = np.sqrt(mse_abr)
+r2_abr = r2_score(y_test, abr_pred)
+
+print(f"Adaptive Boosting Regressor Metrics:")
+print(f"Mean Absolute Error (MAE): {mae_abr:.2f}")
+print(f"Mean Squared Error (MSE): {mse_abr:.2f}")
+print(f"Root Mean Squared Error (RMSE): {rmse_abr:.2f}")
+print(f"R-squared (R2): {r2_abr:.2f}")
+----------------------------------------
+model_comparison = pd.DataFrame({
+    'Model': ['Random Forest', 'Gradient Boosting', 'Linear Regression', 'Adaptive Boosting'],
+    'MAE': [mae, mae_gbr, mae_lr, mae_abr],
+    'MSE': [mse, mse_gbr, mse_lr, mse_abr],
+    'RMSE': [rmse, rmse_gbr, rmse_lr, rmse_abr],
+    'R2 Score': [r2, r2_gbr, r2_lr, r2_abr]
+})
+
+# Round the numeric columns to 2 decimal places for better readability
+model_comparison = model_comparison.round(2)
+
+print("\nModel Performance Comparison:")
+print(model_comparison)
+----------------------------------------
+import pickle
+
+# Save the Gradient Boosting model
+filename = 'gradient_boosting_model.pkl'
+pickle.dump(gbr, open(filename, 'wb'))
+
+print(f"Gradient Boosting model saved to {filename}")
+----------------------------------------

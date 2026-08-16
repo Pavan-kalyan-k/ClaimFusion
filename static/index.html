@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Claims Assessor</title>
+    <!-- Modern Font: Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="background-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <main class="container">
+        <header>
+            <div class="logo">
+                <i class="fa-solid fa-car-burst"></i>
+                <h1>CarCheckup <span>360</span></h1>
+            </div>
+            <p class="subtitle">AI-Powered Damage Assessment & Claim Estimation</p>
+        </header>
+
+        <section class="upload-section">
+            <div id="drop-zone" class="drop-zone">
+                <input type="file" id="file-input" accept="image/*" hidden>
+                <div class="drop-zone-content">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <h3>Drag & Drop Image Here</h3>
+                    <p>or click to browse from your device</p>
+                </div>
+                <img id="image-preview" src="#" alt="Preview" style="display: none;">
+            </div>
+            <button id="analyze-btn" class="glow-on-hover" disabled>
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Analyze Damage
+            </button>
+        </section>
+
+        <!-- Loader -->
+        <div id="loader" class="loader-container" style="display: none;">
+            <div class="spinner"></div>
+            <p>Our AI is assessing the damage...</p>
+        </div>
+
+        <!-- Results Section -->
+        <section id="results-section" class="results-section glass-panel" style="display: none;">
+            <h2>Assessment Report</h2>
+            
+            <div class="summary-card">
+                <i class="fa-solid fa-file-invoice"></i>
+                <p id="summary-text">...</p>
+            </div>
+
+            <div class="dashboard">
+                <div class="dash-card severity-card">
+                    <h3>Severity</h3>
+                    <div class="dash-value" id="severity-val">Moderate</div>
+                </div>
+                
+                <div class="dash-card parts-card">
+                    <h3>Damaged Parts (<span id="parts-count">0</span>)</h3>
+                    <div class="dash-value parts-list" id="parts-val">None</div>
+                </div>
+
+                <div class="dash-card claim-card">
+                    <h3>Estimated Claim</h3>
+                    <div class="dash-value claim-val" id="claim-val">$0.00</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="/app.js"></script>
+</body>
+</html>
