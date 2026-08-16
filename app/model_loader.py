@@ -12,13 +12,30 @@ torch.load = patched_load
 
 from ultralytics import YOLO
 import keras
-from keras.initializers import GlorotUniform
 
-class SafeGlorotUniform(GlorotUniform):
-    def __init__(self, seed=None, input_axes=None, output_axes=None, **kwargs):
-        super().__init__(seed=seed)
+# ---- KERAS COMPATIBILITY PATCHES ----
+# Patch 1: Fix Keras 3 loading older Keras 3 models (input_axes error)
+try:
+    _orig_glorot = keras.initializers.GlorotUniform.__init__
+    def patched_glorot(self, seed=None, input_axes=None, output_axes=None, **kwargs):
+        _orig_glorot(self, seed=seed)
+    keras.initializers.GlorotUniform.__init__ = patched_glorot
+except Exception:
+    pass
 
-keras.utils.get_custom_objects().update({'GlorotUniform': SafeGlorotUniform})
+# Patch 2: Fix Keras 2 loading Keras 3 models (InputLayer error)
+try:
+    _orig_input = keras.layers.InputLayer.__init__
+    def patched_input(self, *args, **kwargs):
+        if 'batch_shape' in kwargs:
+            kwargs['batch_input_shape'] = kwargs.pop('batch_shape')
+        if 'optional' in kwargs:
+            kwargs.pop('optional')
+        _orig_input(self, *args, **kwargs)
+    keras.layers.InputLayer.__init__ = patched_input
+except Exception:
+    pass
+# -------------------------------------
 
 from app.config import settings
 
