@@ -74,7 +74,7 @@ class ModelManager:
 
     def load_yolo(self):
         if self.yolo_model is None:
-            print("Loading YOLO model...")
+            print("Loading YOLO model...", flush=True)
             self.yolo_model = YOLO(settings.YOLO_MODEL_PATH)
         return self.yolo_model
         
@@ -84,7 +84,7 @@ class ModelManager:
 
     def load_keras(self):
         if self.keras_model is None:
-            print("Loading Keras model...")
+            print("Loading Keras model...", flush=True)
             self.keras_model = keras.models.load_model(settings.KERAS_MODEL_PATH, compile=False)
         return self.keras_model
         
@@ -95,7 +95,7 @@ class ModelManager:
 
     def load_ml(self):
         if self.ml_model is None:
-            print("Loading ML model...")
+            print("Loading ML model...", flush=True)
             self.ml_model = joblib.load(settings.ML_MODEL_PATH)
         return self.ml_model
         

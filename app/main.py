@@ -76,12 +76,12 @@ async def debug_predict_yolo(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        print("[DEBUG] IMAGE RECEIVED")
-        print("[DEBUG] YOLO LOAD START")
+        print("[DEBUG] IMAGE RECEIVED", flush=True)
+        print("[DEBUG] YOLO LOAD START", flush=True)
         yolo_model = models.load_yolo()
-        print("[DEBUG] YOLO LOAD SUCCESS")
+        print("[DEBUG] YOLO LOAD SUCCESS", flush=True)
         
-        print("[DEBUG] YOLO INFERENCE START")
+        print("[DEBUG] YOLO INFERENCE START", flush=True)
         results = yolo_model.predict(
             source=file_path,
             conf=settings.YOLO_CONF_THRESHOLD,
@@ -89,7 +89,7 @@ async def debug_predict_yolo(file: UploadFile = File(...)):
             device="cpu",
             verbose=False
         )
-        print("[DEBUG] YOLO INFERENCE SUCCESS")
+        print("[DEBUG] YOLO INFERENCE SUCCESS", flush=True)
         
         yolo_result = results[0]
         boxes = yolo_result.boxes
@@ -107,7 +107,7 @@ async def debug_predict_yolo(file: UploadFile = File(...)):
                     "box": [x1, y1, x2, y2]
                 })
                 
-        print("[DEBUG] RESPONSE CREATED")
+        print("[DEBUG] RESPONSE CREATED", flush=True)
         return {"success": True, "detections": raw_detections}
     except Exception as e:
         import traceback
@@ -132,16 +132,22 @@ async def debug_predict_severity(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
+        print("[DEBUG SEVERITY] IMAGE RECEIVED", flush=True)
         image = cv2.imread(file_path)
         if image is None:
             raise ValueError(f"Could not read image at {file_path}")
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         
+        print("[DEBUG SEVERITY] KERAS LOAD START", flush=True)
         keras_model = models.load_keras()
+        print("[DEBUG SEVERITY] KERAS LOAD SUCCESS", flush=True)
+        
+        print("[DEBUG SEVERITY] INFERENCE START", flush=True)
         crop_batch = preprocess_keras_crop(image_rgb)
         preds = keras_model.predict(crop_batch, verbose=0)[0]
         severity_idx = int(np.argmax(preds))
         part_severity = settings.SEVERITY_CLASSES[severity_idx]
+        print("[DEBUG SEVERITY] INFERENCE SUCCESS", flush=True)
         
         return {"success": True, "severity": part_severity}
     except Exception as e:
