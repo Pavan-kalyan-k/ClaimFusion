@@ -84,39 +84,71 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
         severities = []
         
         if len(final_detections) > 0:
-            print("[PREDICT 06] Severity started", flush=True)
-            keras_model = models.load_keras()
+            print("[PREDICT 06] Severity started (subprocess)", flush=True)
             
-            for det in final_detections:
-                x1, y1, x2, y2 = det["box"]
+            # 1. Unload YOLO completely and free memory before launching Keras!
+            models.unload_yolo()
+            import gc
+            gc.collect()
+            
+            # 2. Prepare data for subprocess
+            import json
+            import sys
+            import subprocess
+            
+            worker_data = {
+                "image_path": image_path,
+                "boxes": [det["box"] for det in final_detections],
+                "model_path": settings.KERAS_MODEL_PATH
+            }
+            
+            # 3. Launch isolated Keras worker
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-m", "app.keras_worker"],
+                    input=json.dumps(worker_data).encode("utf-8"),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=60
+                )
                 
-                # Extract Crop
-                crop = image_rgb[y1:y2, x1:x2]
-                if crop.size == 0:
-                    continue
+                if result.returncode != 0:
+                    error_msg = result.stderr.decode()
+                    if result.returncode == -9 or result.returncode == 137:
+                        error_msg = "Out of Memory (OOM Kill)"
+                    elif result.returncode == -4 or result.returncode == 132:
+                        error_msg = "Illegal Instruction (AVX not supported by CPU)"
+                    raise RuntimeError(f"Keras worker crashed! Exit code {result.returncode}: {error_msg}")
                     
-                # Keras Prediction
-                crop_batch = preprocess_keras_crop(crop)
-                preds = keras_model.predict(crop_batch, verbose=0)[0]
-                severity_idx = int(np.argmax(preds))
-                part_severity = settings.SEVERITY_CLASSES[severity_idx]
+                output = result.stdout.decode()
+                import re
+                match = re.search(r'RESULT_JSON:(\[.*?\])', output)
+                if not match:
+                    raise RuntimeError(f"Could not parse worker output: {output}")
+                    
+                severities_idx = json.loads(match.group(1))
                 
-                severities.append(severity_idx) # Keep integer for max calculation
-                
-                damaged_parts.append(DamagedPart(
-                    part=det["class_name"],
-                    confidence=det["confidence"],
-                    box=det["box"],
-                    severity=part_severity
-                ))
-                
-                detected_part_names.add(det["class_name"])
+                for det, severity_idx in zip(final_detections, severities_idx):
+                    part_severity = settings.SEVERITY_CLASSES[severity_idx]
+                    severities.append(severity_idx)
+                    damaged_parts.append(DamagedPart(
+                        part=det["class_name"],
+                        confidence=det["confidence"],
+                        box=det["box"],
+                        severity=part_severity
+                    ))
+                    detected_part_names.add(det["class_name"])
+            except Exception as e:
+                traceback.print_exc()
+                raise HTTPException(status_code=500, detail=f"Severity Subprocess Failed: {str(e)}")
+            
             print("[PREDICT 07] Severity completed", flush=True)
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Prediction failed: {type(e).__name__}: {str(e)}")
     finally:
-        models.unload_keras() # Free Keras memory!
+        # We don't need to unload keras from the main process anymore, it was isolated!
+        pass
             
     # 4. Determine Overall Severity
     if not severities:
