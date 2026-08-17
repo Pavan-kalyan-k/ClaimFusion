@@ -126,13 +126,25 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
         max_severity_idx = max(severities)
         overall_severity_str = settings.SEVERITY_CLASSES[max_severity_idx]
         
-    # 5. TEMPORARY: BYPASS CLAIM MODEL FOR DIAGNOSTIC TESTING
-    print("[PREDICT 08] Claim model loading BYPASSED")
-    print("[PREDICT 09] Claim model loaded BYPASSED")
-    print("[PREDICT 10] Claim preprocessing BYPASSED")
-    print("[PREDICT 11] Claim prediction BYPASSED")
-    print("[PREDICT 12] Claim prediction completed BYPASSED")
-    claim_amount = 0.0
+    # 5. ML Feature Engineering & Prediction
+    try:
+        if overall_severity_str == "No Damage":
+            claim_amount = 0.0
+        else:
+            print("[PREDICT 08] Claim model loading")
+            ml_model = models.load_ml()
+            print("[PREDICT 09] Claim model loaded")
+            
+            print("[PREDICT 10] Claim preprocessing")
+            ml_features = prepare_ml_features(list(detected_part_names), overall_severity_str)
+            print("[PREDICT 11] Claim prediction")
+            claim_amount = float(ml_model.predict(ml_features)[0])
+            print("[PREDICT 12] Claim prediction completed")
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {type(e).__name__}: {str(e)}")
+    finally:
+        models.unload_ml() # Free ML memory!
 
     print("[PREDICT 13] JSON response")
     
@@ -155,7 +167,7 @@ def run_prediction_pipeline(image_path: str) -> PredictionResponse:
         ),
         claim_prediction=ClaimPredictionResult(
             claim_amount=round(claim_amount, 2),
-            prediction="bypassed_for_diagnosis"
+            prediction="Claim approved" if claim_amount > 0 else "No claim required"
         )
     )
     print("[PREDICT 14] Request completed")

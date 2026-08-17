@@ -27,7 +27,7 @@ x_test['severity'] = le.transform(x_test['severity'])
 print("Severity classes:", le.classes_)
 
 # 4. Train Gradient Boosting
-gbr = GradientBoostingRegressor(random_state=42)
+gbr = GradientBoostingRegressor(random_state=None)
 gbr.fit(x_train, y_train)
 print("Train Accuracy:", gbr.score(x_train, y_train))
 print("Test Accuracy:", gbr.score(x_test, y_test))
@@ -35,5 +35,11 @@ print("Test Accuracy:", gbr.score(x_test, y_test))
 # 5. Save Model
 filename = 'gradient_boosting_model.pkl'
 import joblib
+
+# Clear random state to avoid serialization mismatch across python versions
+gbr.random_state = None
+if hasattr(gbr, '_random_state'):
+    del gbr._random_state
+    
 joblib.dump(gbr, filename)
 print(f"Model saved to {filename}")
