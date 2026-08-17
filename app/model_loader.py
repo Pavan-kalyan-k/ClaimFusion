@@ -20,6 +20,12 @@ def patched_load(*args, **kwargs):
     kwargs['weights_only'] = False
     return _original_load(*args, **kwargs)
 torch.load = patched_load
+# ---- ULTIMATE KERAS MEMORY / AVX FIX ----
+# Disable OneDNN optimizations in TensorFlow.
+# OneDNN aggressively uses AVX instructions and large memory buffers.
+# Disabling it prevents Illegal Instruction crashes and reduces RAM.
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+# ----------------------------------------
 
 from ultralytics import YOLO
 import keras
